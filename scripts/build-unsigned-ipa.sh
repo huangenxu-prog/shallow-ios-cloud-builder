@@ -34,9 +34,10 @@ xcodebuild archive \
     -archivePath "$BUILD_DIR/SFI.xcarchive" \
     -derivedDataPath "$BUILD_DIR/DerivedData" \
     -skipPackagePluginValidation \
-    CODE_SIGNING_ALLOWED=NO \
-    CODE_SIGNING_REQUIRED=NO \
-    CODE_SIGN_IDENTITY="" \
+IPHONEOS_DEPLOYMENT_TARGET=16.0 \
+CODE_SIGNING_ALLOWED=NO \
+CODE_SIGNING_REQUIRED=NO \
+CODE_SIGN_IDENTITY="" \
     2>&1 | tee "$BUILD_DIR/build.log"
 
 APP="$BUILD_DIR/SFI.xcarchive/Products/Applications/sing-box.app"
