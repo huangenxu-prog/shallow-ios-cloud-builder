@@ -1,26 +1,7 @@
-name: Build Unsigned iOS IPA
+name: Build Unsigned sing-box iOS IPA
 
 on:
   workflow_dispatch:
-    inputs:
-      source_repo:
-        description: "GitHub source repository URL"
-        required: true
-        type: string
-      source_ref:
-        description: "Branch, tag or commit"
-        required: false
-        default: "main"
-        type: string
-      project_path:
-        description: "Project directory inside source repository"
-        required: false
-        default: "."
-        type: string
-      scheme:
-        description: "Xcode scheme"
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -33,22 +14,41 @@ jobs:
       - name: Checkout builder
         uses: actions/checkout@v4
 
-      - name: Checkout source
+      - name: Clone sing-box core
         run: |
-          git clone "${{ inputs.source_repo }}" source
-          cd source
-          git checkout "${{ inputs.source_ref }}"
+          git clone --depth 1 --branch testing \
+            https://github.com/SagerNet/sing-box.git sing-box
 
-      - name: Build unsigned IPA
+      - name: Clone Apple client and submodules
+        run: |
+          git clone --depth 1 --branch dev --recurse-submodules \
+            https://github.com/SagerNet/sing-box-for-apple.git sing-box-for-apple
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: sing-box/go.mod
+          cache-dependency-path: sing-box/go.sum
+
+      - name: Install gomobile tools
+        working-directory: sing-box
+        run: |
+          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
+          go install github.com/sagernet/gomobile/cmd/gobind@v0.1.12
+
+      - name: Build Libbox framework
+        working-directory: sing-box
+        run: |
+          go run ./cmd/internal/build_libbox -target apple
+
+      - name: Build unsigned iOS IPA
         run: |
           chmod +x scripts/build-unsigned-ipa.sh
-          ./scripts/build-unsigned-ipa.sh \
-            "source/${{ inputs.project_path }}" \
-            "${{ inputs.scheme }}"
+          ./scripts/build-unsigned-ipa.sh sing-box-for-apple SFI
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: unsigned-ios-ipa
+          name: sing-box-unsigned-ipa
           path: output/*.ipa
           if-no-files-found: error
