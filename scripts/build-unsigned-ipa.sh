@@ -34,7 +34,6 @@ xcodebuild archive \
     -archivePath "$BUILD_DIR/SFI.xcarchive" \
     -derivedDataPath "$BUILD_DIR/DerivedData" \
     -skipPackagePluginValidation \
-IPHONEOS_DEPLOYMENT_TARGET=16.0 \
 CODE_SIGNING_ALLOWED=NO \
 CODE_SIGNING_REQUIRED=NO \
 CODE_SIGN_IDENTITY="" \
