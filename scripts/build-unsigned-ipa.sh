@@ -4,6 +4,10 @@ set -euo pipefail
 PROJECT_DIR="${1:?Missing project directory}"
 SCHEME="${2:-SFI}"
 
+# Keep bundle IDs and embedded identifiers aligned.
+BASE_PACKAGE_IDENTIFIER="${BASE_PACKAGE_IDENTIFIER:-io.nekohasekai.sfamt1}"
+APP_GROUP_IDENTIFIER="${APP_GROUP_IDENTIFIER:-group.${BASE_PACKAGE_IDENTIFIER}}"
+
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 OUTPUT_DIR="$GITHUB_WORKSPACE/output"
 BUILD_DIR="$RUNNER_TEMP/sing-box-ios-build"
@@ -34,6 +38,8 @@ xcodebuild archive \
     -archivePath "$BUILD_DIR/SFI.xcarchive" \
     -derivedDataPath "$BUILD_DIR/DerivedData" \
     -skipPackagePluginValidation \
+    BASE_PACKAGE_IDENTIFIER="$BASE_PACKAGE_IDENTIFIER" \
+    APP_GROUP_IDENTIFIER="$APP_GROUP_IDENTIFIER" \
 CODE_SIGNING_ALLOWED=NO \
 CODE_SIGNING_REQUIRED=NO \
 CODE_SIGN_IDENTITY="" \
