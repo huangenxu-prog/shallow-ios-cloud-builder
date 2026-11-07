@@ -76,13 +76,13 @@ with out.open("w") as stream:
         try:
             data = plistlib.loads(info.read_bytes())
         except Exception as exc:
-            stream.write(f"{info}: plist read failed: {exc}\\n")
+            stream.write(f"{info}: plist read failed: {exc}\n")
             continue
         if data.get("CFBundleIdentifier") or data.get("NSExtension"):
-            stream.write(f"\\n[{info.relative_to(app)}]\\n")
+            stream.write(f"\n[{info.relative_to(app)}]\n")
             for key in keys:
                 if key in data:
-                    stream.write(f"{key} = {data[key]!r}\\n")
+                    stream.write(f"{key} = {data[key]!r}\n")
 PY
 
 {
@@ -96,7 +96,7 @@ PY
     if compgen -G "$DIAG_DIR/dSYMs/*.dSYM" > /dev/null; then
         find "$DIAG_DIR/dSYMs" -name DWARF -type d -maxdepth 4 -print0 |
         while IFS= read -r -d '' dwarf_dir; do
-            find "$dwarf_dir" -maxdepth 1 -type f -exec dwarfdump --uuid {} \\;
+            find "$dwarf_dir" -maxdepth 1 -type f -exec dwarfdump --uuid {} \;
         done
     else
         echo "No dSYM bundles found in archive."
