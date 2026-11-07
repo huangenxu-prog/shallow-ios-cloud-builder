@@ -1,0 +1,54 @@
+name: Build Unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repo:
+        description: "GitHub source repository URL"
+        required: true
+        type: string
+      source_ref:
+        description: "Branch, tag or commit"
+        required: false
+        default: "main"
+        type: string
+      project_path:
+        description: "Project directory inside source repository"
+        required: false
+        default: "."
+        type: string
+      scheme:
+        description: "Xcode scheme"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      - name: Checkout source
+        run: |
+          git clone "${{ inputs.source_repo }}" source
+          cd source
+          git checkout "${{ inputs.source_ref }}"
+
+      - name: Build unsigned IPA
+        run: |
+          chmod +x scripts/build-unsigned-ipa.sh
+          ./scripts/build-unsigned-ipa.sh \
+            "source/${{ inputs.project_path }}" \
+            "${{ inputs.scheme }}"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-ios-ipa
+          path: output/*.ipa
+          if-no-files-found: error
