@@ -2,6 +2,9 @@ name: Build Unsigned sing-box iOS IPA
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - diagnose-crash-symbols
 
 permissions:
   contents: read
