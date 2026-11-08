@@ -214,19 +214,30 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           project = Path("sing-box-for-apple/sing-box.xcodeproj/project.pbxproj")
-          text = project.read_text()
-          pattern = r'(INFOPLIST_FILE = SFI/Info\\.plist;[\\s\\S]{0,1600}?INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;)'
-          matches = list(re.finditer(pattern, text))
-          if len(matches) != 2:
-              raise SystemExit(f"Expected two SFI app build configurations, found {len(matches)}")
-          text = re.sub(pattern, r'\\1\\n\\t\\t\\t\\tINFOPLIST_KEY_UIFileSharingEnabled = YES;', text)
-          if text.count("INFOPLIST_KEY_UIFileSharingEnabled = YES;") != 2:
-              raise SystemExit("UIFileSharingEnabled was not applied to both SFI configurations")
-          project.write_text(text)
-          print("Enabled iOS Files app sharing for the sing-box Documents directory (Debug + Release)")
+          lines = project.read_text().splitlines()
+          app_configs = [i for i, line in enumerate(lines) if "INFOPLIST_FILE = SFI/Info.plist;" in line]
+          if len(app_configs) != 2:
+              raise SystemExit(f"Expected 2 SFI app configurations, found {len(app_configs)}")
+
+          inserted = 0
+          for start in app_configs:
+              end = next((i for i in range(start, min(start + 80, len(lines)))
+                          if "INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;" in lines[i]), None)
+              if end is None:
+                  raise SystemExit(f"Could not find document-location setting near line {start + 1}")
+              if end + 1 < len(lines) and "INFOPLIST_KEY_UIFileSharingEnabled = YES;" in lines[end + 1]:
+                  continue
+              indent = lines[end][:len(lines[end]) - len(lines[end].lstrip())]
+              lines.insert(end + 1, indent + "INFOPLIST_KEY_UIFileSharingEnabled = YES;")
+              inserted += 1
+
+          result = "\n".join(lines) + "\n"
+          if result.count("INFOPLIST_KEY_UIFileSharingEnabled = YES;") != 2:
+              raise SystemExit("Expected exactly two UIFileSharingEnabled settings after patch")
+          project.write_text(result)
+          print(f"Enabled Files app sharing in both SFI app configurations; inserted {inserted} setting(s)")
           PY
 
       - name: Build unsigned iOS IPA
