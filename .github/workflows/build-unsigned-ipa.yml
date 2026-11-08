@@ -87,21 +87,21 @@ jobs:
 
           go = Path("sing-box/route/network.go")
           source = go.read_text()
-          anchor = "\\t\\toldInterfaces := r.networkInterfaces.Load()\\n\\t\\tnewInterfaces := common.Filter(interfaces, func(it adapter.NetworkInterface) bool {"
-          replacement = "\\t\\tif C.IsDarwin {\\n\\t\\t\\tr.logger.Error(\\"NETWORK_DIAG interfaces before net.FlagUp filter: \\", strings.Join(common.Map(interfaces, func(it adapter.NetworkInterface) string {\\n\\t\\t\\t\\treturn F.ToString(\\"name=\\", it.Name, \\" index=\\", it.Index, \\" flags=\\", it.Flags, \\" type=\\", it.Type)\\n\\t\\t\\t}), \\" | \\"))\\n\\t\\t}\\n" + anchor
+          anchor = "\t\toldInterfaces := r.networkInterfaces.Load()\n\t\tnewInterfaces := common.Filter(interfaces, func(it adapter.NetworkInterface) bool {"
+          replacement = "\t\tif C.IsDarwin {\n\t\t\tr.logger.Error(\"NETWORK_DIAG interfaces before net.FlagUp filter: \", strings.Join(common.Map(interfaces, func(it adapter.NetworkInterface) string {\n\t\t\t\treturn F.ToString(\"name=\", it.Name, \" index=\", it.Index, \" flags=\", it.Flags, \" type=\", it.Type)\n\t\t\t}), \" | \"))\n\t\t}\n" + anchor
           if source.count(anchor) != 1:
               raise SystemExit("Go diagnostic insertion anchor is not unique")
           source = source.replace(anchor, replacement, 1)
-          anchor2 = "\\t\\tr.networkInterfaces.Store(newInterfaces)\\n\\t\\tif len(newInterfaces) > 0"
-          replacement2 = "\\t\\tr.networkInterfaces.Store(newInterfaces)\\n\\t\\tif C.IsDarwin {\\n\\t\\t\\tr.logger.Error(\\"NETWORK_DIAG interfaces after net.FlagUp filter: count=\\", len(newInterfaces))\\n\\t\\t}\\n\\t\\tif len(newInterfaces) > 0"
+          anchor2 = "\t\tr.networkInterfaces.Store(newInterfaces)\n\t\tif len(newInterfaces) > 0"
+          replacement2 = "\t\tr.networkInterfaces.Store(newInterfaces)\n\t\tif C.IsDarwin {\n\t\t\tr.logger.Error(\"NETWORK_DIAG interfaces after net.FlagUp filter: count=\", len(newInterfaces))\n\t\t}\n\t\tif len(newInterfaces) > 0"
           if source.count(anchor2) != 1:
               raise SystemExit("Go filtered-count insertion anchor is not unique")
           go.write_text(source.replace(anchor2, replacement2, 1))
 
           swift = Path("sing-box-for-apple/Library/Network/ExtensionPlatformInterface.swift")
           source = swift.read_text()
-          anchor = "        let path = nwMonitor.currentPath\\n        if path.status == .unsatisfied {"
-          replacement = "        let path = nwMonitor.currentPath\\n        NSLog(\\"[sing-box] NETWORK_DIAG NWPath status=%@ interfaces=%@\\", String(describing: path.status), path.availableInterfaces.map { \\"\\\\($0.name)#\\\\($0.index)/\\\\($0.type)\\" }.joined(separator: \\",\\"))\\n        if path.status == .unsatisfied {"
+          anchor = "        let path = nwMonitor.currentPath\n        if path.status == .unsatisfied {"
+          replacement = "        let path = nwMonitor.currentPath\n        NSLog(\"[sing-box] NETWORK_DIAG NWPath status=%@ interfaces=%@\", String(describing: path.status), path.availableInterfaces.map { \"\\($0.name)#\\($0.index)/\\($0.type)\" }.joined(separator: \",\"))\n        if path.status == .unsatisfied {"
           if source.count(anchor) != 1:
               raise SystemExit("Swift NWPath diagnostic insertion anchor is not unique")
           swift.write_text(source.replace(anchor, replacement, 1))
