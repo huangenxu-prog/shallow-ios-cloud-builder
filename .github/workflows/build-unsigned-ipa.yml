@@ -50,6 +50,42 @@ jobs:
         run: |
           go run ./cmd/internal/build_libbox -target apple
 
+      - name: Make shared directory initialization fail-safe
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path("sing-box-for-apple/Library/Shared/FilePath.swift")
+          text = source.read_text()
+          old = """    private static let defaultSharedDirectory: URL! = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName)
+
+              #if os(iOS)
+                  public static let sharedDirectory = defaultSharedDirectory!
+          """
+          new = """    private static let defaultSharedDirectory: URL = {
+                  if let sharedDirectory = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName) {
+                      return sharedDirectory
+                  }
+                  let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                      ?? FileManager.default.temporaryDirectory
+                  let fallbackDirectory = applicationSupport.appendingPathComponent(packageName, isDirectory: true)
+                  try? FileManager.default.createDirectory(at: fallbackDirectory, withIntermediateDirectories: true)
+                  NSLog("[sing-box] App Group container unavailable; using local fallback directory: %@", fallbackDirectory.path)
+                  return fallbackDirectory
+              }()
+
+              #if os(iOS)
+                  public static let sharedDirectory = defaultSharedDirectory
+          """
+          if new.strip() in text:
+              print("Fail-safe shared directory patch already present")
+          elif old in text:
+              source.write_text(text.replace(old, new, 1))
+              print("Replaced force unwrap with a logged local fallback")
+          else:
+              raise SystemExit("Expected FilePath.swift block not found; refusing unsafe patch")
+          PY
+
       - name: Patch iOS 16 availability boundary
         run: |
           python3 - <<'PY'
