@@ -83,6 +83,44 @@ jobs:
           print("FilePath now handles an unavailable shared container without force-unwrapping nil")
           PY
 
+      - name: Allow selecting sing-box text configuration files
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
+          text = source.read_text()
+
+          old_types = """        private static var importContentTypes: [UTType] {
+              ["bpf", "json"].flatMap { UTType.types(tag: $0, tagClass: .filenameExtension, conformingTo: nil) }
+          }"""
+          new_types = """        private static var importContentTypes: [UTType] {
+              [.item]
+          }"""
+          if old_types in text:
+              text = text.replace(old_types, new_types, 1)
+          elif new_types not in text:
+              raise SystemExit("Could not locate importContentTypes; refusing unsafe patch")
+
+          old_branch = """                    if url.pathExtension.lowercased() == "json" {
+                        let fileName = url.deletingPathExtension().lastPathComponent
+                        localImportRequest = NewProfileView.LocalImportRequest(name: fileName, fileURL: url)
+                        return
+                    }"""
+          new_branch = """                    if url.pathExtension.lowercased() != "bpf" {
+                        let fileName = url.deletingPathExtension().lastPathComponent
+                        localImportRequest = NewProfileView.LocalImportRequest(name: fileName, fileURL: url)
+                        return
+                    }"""
+          if old_branch in text:
+              text = text.replace(old_branch, new_branch, 1)
+          elif new_branch not in text:
+              raise SystemExit("Could not locate file import dispatch; refusing unsafe patch")
+
+          source.write_text(text)
+          print("File importer now permits selecting configuration files; .bpf remains binary-imported and other files use text validation")
+          PY
+
       - name: Patch iOS 16 availability boundary
         run: |
           python3 - <<'PY'
