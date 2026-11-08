@@ -87,21 +87,15 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           menu = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
           text = menu.read_text()
-
-          type_pattern = r"(private static var importContentTypes: \\[UTType\] \\{)\\s*.*?(\\n\\s*\\})"
-          text, count = re.subn(
-              type_pattern,
-              lambda match: match.group(1) + "\n            [.data]" + match.group(2),
-              text,
-              count=1,
-              flags=re.S,
-          )
-          if count != 1:
+          marker = "private static var importContentTypes: [UTType] {"
+          if text.count(marker) != 1:
               raise SystemExit("Could not uniquely locate menu importContentTypes")
+          start = text.index(marker)
+          end = text.index("\n        }", start) + len("\n        }")
+          text = text[:start] + marker + "\n            [.data]" + text[end:]
 
           old_dispatch = 'if url.pathExtension.lowercased() == "json"'
           new_dispatch = 'if url.pathExtension.lowercased() != "bpf"'
