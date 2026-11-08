@@ -57,13 +57,11 @@ jobs:
 
           source = Path("sing-box-for-apple/Library/Shared/FilePath.swift")
           text = source.read_text()
-          old = """    private static let defaultSharedDirectory: URL! = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName)
+          old = "    private static let defaultSharedDirectory: URL! = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName)"
+          new = """    private static let defaultSharedDirectory: URL? = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName)
 
-              #if os(iOS)
-                  public static let sharedDirectory = defaultSharedDirectory!
-          """
-          new = """    private static let defaultSharedDirectory: URL = {
-                  if let sharedDirectory = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName) {
+              private static let resolvedSharedDirectory: URL = {
+                  if let sharedDirectory = defaultSharedDirectory {
                       return sharedDirectory
                   }
                   let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -72,18 +70,16 @@ jobs:
                   try? FileManager.default.createDirectory(at: fallbackDirectory, withIntermediateDirectories: true)
                   NSLog("[sing-box] App Group container unavailable; using local fallback directory: %@", fallbackDirectory.path)
                   return fallbackDirectory
-              }()
-
-              #if os(iOS)
-                  public static let sharedDirectory = defaultSharedDirectory
-          """
-          if new.strip() in text:
+              }()"""
+          if "private static let resolvedSharedDirectory: URL" in text:
               print("Fail-safe shared directory patch already present")
           elif old in text:
-              source.write_text(text.replace(old, new, 1))
+              text = text.replace(old, new, 1)
+              text = text.replace("public static let sharedDirectory = defaultSharedDirectory!", "public static let sharedDirectory = resolvedSharedDirectory", 1)
+              source.write_text(text)
               print("Replaced force unwrap with a logged local fallback")
           else:
-              raise SystemExit("Expected FilePath.swift block not found; refusing unsafe patch")
+              raise SystemExit("Expected FilePath.swift declaration not found; refusing unsafe patch")
           PY
 
       - name: Patch iOS 16 availability boundary
