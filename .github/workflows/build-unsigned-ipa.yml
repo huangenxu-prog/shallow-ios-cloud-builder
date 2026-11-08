@@ -41,15 +41,15 @@ jobs:
           source = Path("sing-box-for-apple/SFI/ApplicationDelegate.swift")
           text = source.read_text()
           calls = [
-              "        LibboxPrepareCrashSignalHandlers()\\n",
-              "        NativeCrashReporter.installForCurrentProcess()\\n",
-              "        LibboxReinstallCrashSignalHandlers()\\n",
+              "        LibboxPrepareCrashSignalHandlers()\n",
+              "        NativeCrashReporter.installForCurrentProcess()\n",
+              "        LibboxReinstallCrashSignalHandlers()\n",
           ]
           for call in calls:
               if call not in text:
                   raise SystemExit(f"Expected launch signal-handler call not found: {call.strip()}")
               text = text.replace(call, "", 1)
-          text = text.replace("import Libbox\\n", "", 1)
+          text = text.replace("import Libbox\n", "", 1)
           source.write_text(text)
           print("Removed app-process signal-handler chain for one diagnostic build")
           PY
