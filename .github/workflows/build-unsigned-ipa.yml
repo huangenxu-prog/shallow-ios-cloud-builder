@@ -83,35 +83,42 @@ jobs:
           print("FilePath now handles an unavailable shared container without force-unwrapping nil")
           PY
 
-      - name: Allow selecting sing-box text configuration files
+      - name: Allow selecting JSON configuration files in both iOS importers
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
 
-          source = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
-          text = source.read_text()
+          menu = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
+          text = menu.read_text()
 
-          # Match Swift source structurally rather than depending on exact indentation.
-          type_pattern = r"(private static var importContentTypes: \[UTType\] \{)\s*.*?(\n\s*\})"
-          text, type_count = re.subn(
+          type_pattern = r"(private static var importContentTypes: \\[UTType\\] \\{)\\s*.*?(\\n\\s*\\})"
+          text, count = re.subn(
               type_pattern,
-              lambda match: match.group(1) + "\n            [.item]" + match.group(2),
+              lambda match: match.group(1) + "\\n            [.data]" + match.group(2),
               text,
               count=1,
               flags=re.S,
           )
-          if type_count != 1:
-              raise SystemExit("Could not uniquely locate importContentTypes; refusing unsafe patch")
+          if count != 1:
+              raise SystemExit("Could not uniquely locate menu importContentTypes")
 
           old_dispatch = 'if url.pathExtension.lowercased() == "json"'
           new_dispatch = 'if url.pathExtension.lowercased() != "bpf"'
           if text.count(old_dispatch) != 1:
-              raise SystemExit("Could not uniquely locate JSON import dispatch; refusing unsafe patch")
+              raise SystemExit("Could not uniquely locate menu JSON import dispatch")
           text = text.replace(old_dispatch, new_dispatch, 1)
+          menu.write_text(text)
 
-          source.write_text(text)
-          print("File importer now accepts arbitrary file types; .bpf remains binary-imported and other files use text validation")
+          profile = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileView.swift")
+          view = profile.read_text()
+          old_picker = "allowedContentTypes: [.json]"
+          if view.count(old_picker) != 2:
+              raise SystemExit(f"Expected two profile JSON pickers, found {view.count(old_picker)}")
+          view = view.replace(old_picker, "allowedContentTypes: [.data]")
+          profile.write_text(view)
+
+          print("Both iOS file importers now accept data files; menu importer routes non-BPF files through local config validation")
           PY
 
       - name: Patch iOS 16 availability boundary
