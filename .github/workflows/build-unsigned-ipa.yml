@@ -89,13 +89,17 @@ jobs:
           from pathlib import Path
 
           menu = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
-          text = menu.read_text()
+          lines = menu.read_text().splitlines()
           marker = "private static var importContentTypes: [UTType] {"
-          if text.count(marker) != 1:
-              raise SystemExit("Could not uniquely locate menu importContentTypes")
-          start = text.index(marker)
-          end = text.index("\n        }", start) + len("\n        }")
-          text = text[:start] + marker + "\n            [.data]" + text[end:]
+          matches = [i for i, line in enumerate(lines) if marker in line]
+          if len(matches) != 1:
+              raise SystemExit(f"Expected one importContentTypes declaration, found {len(matches)}")
+          start = matches[0]
+          end = next((i for i in range(start + 1, len(lines)) if lines[i].strip() == "}"), None)
+          if end is None:
+              raise SystemExit("Could not locate importContentTypes closing brace")
+          lines[start + 1:end] = ["            [.data]"]
+          text = "\n".join(lines) + "\n"
 
           old_dispatch = 'if url.pathExtension.lowercased() == "json"'
           new_dispatch = 'if url.pathExtension.lowercased() != "bpf"'
@@ -109,10 +113,9 @@ jobs:
           old_picker = "allowedContentTypes: [.json]"
           if view.count(old_picker) != 2:
               raise SystemExit(f"Expected two profile JSON pickers, found {view.count(old_picker)}")
-          view = view.replace(old_picker, "allowedContentTypes: [.data]")
-          profile.write_text(view)
+          profile.write_text(view.replace(old_picker, "allowedContentTypes: [.data]"))
 
-          print("Both iOS file importers now accept data files; menu importer routes non-BPF files through local config validation")
+          print("Both iOS importers accept generic data files; Swift braces preserved")
           PY
 
       - name: Patch iOS 16 availability boundary
