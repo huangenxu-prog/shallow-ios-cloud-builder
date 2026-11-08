@@ -93,10 +93,10 @@ jobs:
           text = source.read_text()
 
           # Match Swift source structurally rather than depending on exact indentation.
-          type_pattern = r"(private static var importContentTypes: \\[UTType\\] \\{)\\s*.*?(\\n\\s*\\})"
+          type_pattern = r"(private static var importContentTypes: \[UTType\] \{)\s*.*?(\n\s*\})"
           text, type_count = re.subn(
               type_pattern,
-              lambda match: match.group(1) + "\\n            [.item]" + match.group(2),
+              lambda match: match.group(1) + "\n            [.item]" + match.group(2),
               text,
               count=1,
               flags=re.S,
@@ -104,7 +104,7 @@ jobs:
           if type_count != 1:
               raise SystemExit("Could not uniquely locate importContentTypes; refusing unsafe patch")
 
-          branch_pattern = r'if url\\.pathExtension\\.lowercased\\(\\) == "json"'
+          branch_pattern = r'if url\.pathExtension\\.lowercased\(\) == "json"'
           text, branch_count = re.subn(
               branch_pattern,
               'if url.pathExtension.lowercased() != "bpf"',
