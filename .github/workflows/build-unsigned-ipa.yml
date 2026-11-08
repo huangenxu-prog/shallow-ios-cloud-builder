@@ -74,9 +74,13 @@ jobs:
           chmod +x scripts/build-unsigned-ipa.sh
           ./scripts/build-unsigned-ipa.sh sing-box-for-apple SFI
 
-      - name: Upload IPA
+      - name: Upload IPA, signing entitlements and crash diagnostics
         uses: actions/upload-artifact@v4
         with:
-          name: sing-box-unsigned-ipa
-          path: output/*.ipa
+          name: sing-box-v9-ipa-entitlements-diagnostics
+          path: |
+            output/*.ipa
+            output/signing-entitlements/**
+            output/diagnostics/**
           if-no-files-found: error
+          retention-days: 90
