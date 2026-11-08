@@ -210,6 +210,25 @@ jobs:
               raise SystemExit("Expected MainView.swift declaration exactly once; refusing unsafe patch")
           PY
 
+      - name: Expose sing-box Documents folder in Files app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          project = Path("sing-box-for-apple/sing-box.xcodeproj/project.pbxproj")
+          text = project.read_text()
+          pattern = r'(INFOPLIST_FILE = SFI/Info\\.plist;[\\s\\S]{0,1600}?INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;)'
+          matches = list(re.finditer(pattern, text))
+          if len(matches) != 2:
+              raise SystemExit(f"Expected two SFI app build configurations, found {len(matches)}")
+          text = re.sub(pattern, r'\\1\\n\\t\\t\\t\\tINFOPLIST_KEY_UIFileSharingEnabled = YES;', text)
+          if text.count("INFOPLIST_KEY_UIFileSharingEnabled = YES;") != 2:
+              raise SystemExit("UIFileSharingEnabled was not applied to both SFI configurations")
+          project.write_text(text)
+          print("Enabled iOS Files app sharing for the sing-box Documents directory (Debug + Release)")
+          PY
+
       - name: Build unsigned iOS IPA
         run: |
           chmod +x scripts/build-unsigned-ipa.sh
