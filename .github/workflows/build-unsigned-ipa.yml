@@ -71,15 +71,15 @@ jobs:
                   NSLog("[sing-box] App Group container unavailable; using local fallback directory: %@", fallbackDirectory.path)
                   return fallbackDirectory
               }()"""
-          if "private static let resolvedSharedDirectory: URL" in text:
-              print("Fail-safe shared directory patch already present")
-          elif old in text:
+          if old in text:
               text = text.replace(old, new, 1)
-              text = text.replace("public static let sharedDirectory = defaultSharedDirectory!", "public static let sharedDirectory = resolvedSharedDirectory", 1)
-              source.write_text(text)
-              print("Replaced force unwrap with a logged local fallback")
-          else:
-              raise SystemExit("Expected FilePath.swift declaration not found; refusing unsafe patch")
+          if "private static let resolvedSharedDirectory: URL" not in text:
+              raise SystemExit("Could not establish resolvedSharedDirectory; refusing unsafe patch")
+          marker = "#if os(iOS)"
+          head, tail = text.split(marker, 1)
+          tail = tail.replace("defaultSharedDirectory", "resolvedSharedDirectory")
+          source.write_text(head + marker + tail)
+          print("FilePath now handles an unavailable shared container without force-unwrapping nil")
           PY
 
       - name: Patch iOS 16 availability boundary
