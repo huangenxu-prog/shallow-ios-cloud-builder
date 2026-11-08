@@ -80,6 +80,49 @@ jobs:
           print("Enabled with_gvisor for all Apple Libbox variants")
           PY
 
+      - name: Add runtime network-interface diagnostics (no behavior changes)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          go = Path("sing-box/route/network.go")
+          source = go.read_text()
+          anchor = """		oldInterfaces := r.networkInterfaces.Load()
+		newInterfaces := common.Filter(interfaces, func(it adapter.NetworkInterface) bool {"""
+          replacement = """		if C.IsDarwin {
+			r.logger.Error("NETWORK_DIAG interfaces before net.FlagUp filter: ", strings.Join(common.Map(interfaces, func(it adapter.NetworkInterface) string {
+				return F.ToString("name=", it.Name, " index=", it.Index, " flags=", it.Flags, " type=", it.Type)
+			}), " | "))
+		}
+		oldInterfaces := r.networkInterfaces.Load()
+		newInterfaces := common.Filter(interfaces, func(it adapter.NetworkInterface) bool {"""
+          if source.count(anchor) != 1:
+              raise SystemExit("Go diagnostic insertion anchor is not unique")
+          source = source.replace(anchor, replacement, 1)
+          anchor2 = """		r.networkInterfaces.Store(newInterfaces)
+		if len(newInterfaces) > 0"""
+          replacement2 = """		r.networkInterfaces.Store(newInterfaces)
+		if C.IsDarwin {
+			r.logger.Error("NETWORK_DIAG interfaces after net.FlagUp filter: count=", len(newInterfaces))
+		}
+		if len(newInterfaces) > 0"""
+          if source.count(anchor2) != 1:
+              raise SystemExit("Go filtered-count insertion anchor is not unique")
+          go.write_text(source.replace(anchor2, replacement2, 1))
+
+          swift = Path("sing-box-for-apple/Library/Network/ExtensionPlatformInterface.swift")
+          source = swift.read_text()
+          anchor = """        let path = nwMonitor.currentPath
+        if path.status == .unsatisfied {"""
+          replacement = """        let path = nwMonitor.currentPath
+        NSLog("[sing-box] NETWORK_DIAG NWPath status=%@ interfaces=%@", String(describing: path.status), path.availableInterfaces.map { "\\($0.name)#\\($0.index)/\\($0.type)" }.joined(separator: ","))
+        if path.status == .unsatisfied {"""
+          if source.count(anchor) != 1:
+              raise SystemExit("Swift NWPath diagnostic insertion anchor is not unique")
+          swift.write_text(source.replace(anchor, replacement, 1))
+          print("Added diagnostic-only logs for NWPath interfaces and Go net.FlagUp filtering")
+          PY
+
       - name: Build Libbox framework
         working-directory: sing-box
         run: |
