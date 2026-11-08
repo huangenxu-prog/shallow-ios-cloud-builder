@@ -61,6 +61,25 @@ jobs:
           go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
           go install github.com/sagernet/gomobile/cmd/gobind@v0.1.12
 
+      - name: Enable gVisor in Apple Libbox build
+        working-directory: sing-box
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path("cmd/internal/build_libbox/main.go")
+          text = source.read_text()
+          anchor = 'sharedTags = append(sharedTags, "with_quic",'
+          replacement = 'sharedTags = append(sharedTags, "with_gvisor", "with_quic",'
+          if text.count(anchor) != 1:
+              raise SystemExit("Could not uniquely locate shared Apple build tags")
+          text = text.replace(anchor, replacement, 1)
+          if '"with_gvisor"' not in text:
+              raise SystemExit("gVisor build tag was not added")
+          source.write_text(text)
+          print("Enabled with_gvisor for all Apple Libbox variants")
+          PY
+
       - name: Build Libbox framework
         working-directory: sing-box
         run: |
