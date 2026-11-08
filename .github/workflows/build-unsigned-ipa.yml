@@ -58,7 +58,7 @@ jobs:
           source = Path("sing-box-for-apple/SFI/MainView.swift")
           text = source.read_text()
           declaration = "    private func sidebarPageContent(for page: NavigationPage, remoteControlInToolbar: Bool) -> some View {"
-          annotated = "    @available(iOS 16.0, *)\\n" + declaration
+          annotated = "    @available(iOS 16.0, *)\n" + declaration
 
           if annotated in text:
               print("Availability annotation already present; no change needed")
