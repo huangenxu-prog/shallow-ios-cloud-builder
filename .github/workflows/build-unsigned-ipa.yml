@@ -78,6 +78,7 @@ jobs:
           marker = "#if os(iOS)"
           head, tail = text.split(marker, 1)
           tail = tail.replace("defaultSharedDirectory", "resolvedSharedDirectory")
+          tail = tail.replace("resolvedSharedDirectory!", "resolvedSharedDirectory")
           source.write_text(head + marker + tail)
           print("FilePath now handles an unavailable shared container without force-unwrapping nil")
           PY
