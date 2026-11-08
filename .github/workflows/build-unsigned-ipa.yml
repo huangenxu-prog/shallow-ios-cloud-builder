@@ -118,6 +118,44 @@ jobs:
           print("Both iOS importers accept generic data files; Swift braces preserved")
           PY
 
+      - name: Use loopback TCP for iOS command channel
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          secret = "sb-ios-local-command-7f4a9c2e81d6b305"
+
+          app = Path("sing-box-for-apple/Library/Shared/ServiceSetup.swift")
+          text = app.read_text()
+          app_anchor = "        options.platformMetadata = PlatformMetadata.json()"
+          app_insert = app_anchor + f"""
+
+                  #if os(iOS)
+                      options.commandServerListenPort = 17990
+                      options.commandServerSecret = "{secret}"
+                  #endif"""
+          if text.count(app_anchor) != 1:
+              raise SystemExit("Could not uniquely locate app ServiceSetup platformMetadata")
+          text = text.replace(app_anchor, app_insert, 1)
+          app.write_text(text)
+
+          extension = Path("sing-box-for-apple/Library/Network/ExtensionProvider.swift")
+          text = extension.read_text()
+          extension_anchor = "        options.platformMetadata = platformMetadata()"
+          extension_insert = extension_anchor + f"""
+
+                  #if os(iOS)
+                      options.commandServerListenPort = 17990
+                      options.commandServerSecret = "{secret}"
+                  #endif"""
+          if text.count(extension_anchor) != 1:
+              raise SystemExit("Could not uniquely locate ExtensionProvider platformMetadata")
+          text = text.replace(extension_anchor, extension_insert, 1)
+          extension.write_text(text)
+
+          print("iOS app and Packet Tunnel now share authenticated loopback TCP command channel on 127.0.0.1:17990")
+          PY
+
       - name: Patch iOS 16 availability boundary
         run: |
           python3 - <<'PY'
