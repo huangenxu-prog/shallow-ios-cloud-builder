@@ -153,6 +153,25 @@ jobs:
           print("Both iOS importers accept generic data files; Swift braces preserved")
           PY
 
+      - name: Fix local file URL access during profile import
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          for name in (
+              'sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileViewModel.swift',
+              'sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift',
+          ):
+              path = Path(name)
+              source = path.read_text()
+              old = '.withRequiredSecurityScopedAccess('
+              count = source.count(old)
+              if count < 1:
+                  raise SystemExit(f'Expected file read access call in {name}')
+              path.write_text(source.replace(old, '.withSecurityScopedAccess('))
+              print(f'{name}: updated {count} call(s)')
+          PY
+
       - name: Use loopback TCP for iOS command channel
         run: |
           python3 - <<'PY'
