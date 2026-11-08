@@ -157,35 +157,28 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          menu = Path('sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift')
-          text = menu.read_text()
-          old_menu = '''try url.withRequiredSecurityScopedAccess(
-                                      or: NSError(domain: "NewProfileMenuView", code: 0, userInfo: [NSLocalizedDescriptionKey: String(localized: "Missing access to selected file")])
-                                  ) {
-                                      try Data(contentsOf: url)
-                                  }'''
-          new_menu = '''try url.withSecurityScopedAccess {
-                                      try Data(contentsOf: url)
-                                  }'''
-          if text.count(old_menu) != 1:
-              raise SystemExit('Could not uniquely locate menu file read block')
-          menu.write_text(text.replace(old_menu, new_menu, 1))
+          cases = [
+              (
+                  Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift"),
+                  r'try url\.withRequiredSecurityScopedAccess\([\s\S]*?\)\s*\{\s*try Data\(contentsOf: url\)\s*\}',
+                  "try url.withSecurityScopedAccess {\n                            try Data(contentsOf: url)\n                        }",
+              ),
+              (
+                  Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileViewModel.swift"),
+                  r'configContent = try fileURL\.withRequiredSecurityScopedAccess\([\s\S]*?\)\s*\{\s*try String\(contentsOf: fileURL\)\s*\}',
+                  "configContent = try fileURL.withSecurityScopedAccess {\n                                try String(contentsOf: fileURL)\n                            }",
+              ),
+          ]
 
-          model = Path('sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileViewModel.swift')
-          text = model.read_text()
-          old_model = '''configContent = try fileURL.withRequiredSecurityScopedAccess(
-                                          or: NSError(domain: "NewProfileViewModel", code: 0, userInfo: [NSLocalizedDescriptionKey: String(localized: "Missing access to selected file")])
-                                      ) {
-                                          try String(contentsOf: fileURL)
-                                      }'''
-          new_model = '''configContent = try fileURL.withSecurityScopedAccess {
-                                          try String(contentsOf: fileURL)
-                                      }'''
-          if text.count(old_model) != 1:
-              raise SystemExit('Could not uniquely locate profile file read block')
-          model.write_text(text.replace(old_model, new_model, 1))
-          print('Both file readers now call the best-effort API with its correct signature')
+          for path, pattern, replacement in cases:
+              source = path.read_text()
+              updated, count = re.subn(pattern, lambda _: replacement, source, count=1)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one target file-read block in {path}, found {count}")
+              path.write_text(updated)
+              print(f"Patched {path}")
           PY
 
       - name: Use loopback TCP for iOS command channel
