@@ -1,12 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-PROJECT_DIR="\${1:?Missing project directory}"
-SCHEME="\${2:-SFI}"
+PROJECT_DIR="${1:?Missing project directory}"
+SCHEME="${2:-SFI}"
 
 # Keep the bundle IDs, Info.plist values and signing entitlements aligned.
-BASE_PACKAGE_IDENTIFIER="\${BASE_PACKAGE_IDENTIFIER:-io.nekohasekai.sfamt1}"
-APP_GROUP_IDENTIFIER="\${APP_GROUP_IDENTIFIER:-group.\${BASE_PACKAGE_IDENTIFIER}}"
+BASE_PACKAGE_IDENTIFIER="${BASE_PACKAGE_IDENTIFIER:-io.nekohasekai.sfamt1}"
+APP_GROUP_IDENTIFIER="${APP_GROUP_IDENTIFIER:-group.${BASE_PACKAGE_IDENTIFIER}}"
 
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 OUTPUT_DIR="$GITHUB_WORKSPACE/output"
