@@ -31,10 +31,13 @@ jobs:
       - name: Apply REALITY X25519MLKEM768 compatibility patch
         working-directory: sing-box
         run: |
-          git fetch --depth=1 https://github.com/mkd47/sing-box.git 8b4a23018b53b62891b832a1c497f70be09c800c
-          git cherry-pick FETCH_HEAD
-          git log -1 --oneline
-          go test -tags with_utls ./common/tls/
+          git fetch --depth=2 https://github.com/mkd47/sing-box.git 8b4a23018b53b62891b832a1c497f70be09c800c
+          git diff FETCH_HEAD^ FETCH_HEAD -- common/tls/reality_client.go > /tmp/reality-mlkem.patch
+          test -s /tmp/reality-mlkem.patch
+          git apply --check /tmp/reality-mlkem.patch
+          git apply /tmp/reality-mlkem.patch
+          git diff --check
+          git diff --stat
 
       - name: Clone Apple client and submodules
         run: |
@@ -46,6 +49,11 @@ jobs:
         with:
           go-version-file: sing-box/go.mod
           cache-dependency-path: sing-box/go.sum
+
+      - name: Test REALITY compatibility patch
+        working-directory: sing-box
+        run: |
+          go test -tags with_utls ./common/tls/
 
       - name: Install gomobile tools
         working-directory: sing-box
