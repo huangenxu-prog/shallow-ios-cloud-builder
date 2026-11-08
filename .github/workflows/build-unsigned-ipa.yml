@@ -92,10 +92,10 @@ jobs:
           menu = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
           text = menu.read_text()
 
-          type_pattern = r"(private static var importContentTypes: \\[UTType\\] \\{)\\s*.*?(\\n\\s*\\})"
+          type_pattern = r"(private static var importContentTypes: \\[UTType\] \\{)\\s*.*?(\\n\\s*\\})"
           text, count = re.subn(
               type_pattern,
-              lambda match: match.group(1) + "\\n            [.data]" + match.group(2),
+              lambda match: match.group(1) + "\n            [.data]" + match.group(2),
               text,
               count=1,
               flags=re.S,
