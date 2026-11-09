@@ -182,13 +182,14 @@ jobs:
           from pathlib import Path
 
           path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileView.swift")
-          source = path.read_text()
-          import_line = '                FormPickerOption(true, String(localized: "Import")),\\n'
-          if source.count(import_line) == 1:
-              source = source.replace(import_line, "", 1)
-          elif 'FormPickerOption(true, String(localized: "Import"))' in source:
-              raise SystemExit("Import option exists in an unexpected form; refusing unsafe edit")
-          path.write_text(source)
+          lines = path.read_text().splitlines(keepends=True)
+          marker = 'FormPickerOption(true, String(localized: "Import"))'
+          matches = [i for i, line in enumerate(lines) if marker in line]
+          if len(matches) == 1:
+              del lines[matches[0]]
+          elif len(matches) > 1:
+              raise SystemExit(f"Found {len(matches)} Import options; refusing ambiguous edit")
+          path.write_text("".join(lines))
           print("Removed Import option; Create New remains.")
           PY
 
