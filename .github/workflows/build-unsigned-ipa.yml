@@ -726,6 +726,30 @@ jobs:
               if kept != lines:
                   path.write_text("".join(kept))
 
+          # The interface-filter diagnostics were also added to the Go core.
+          go_path = Path("sing-box/route/network.go")
+          if go_path.exists():
+              source = go_path.read_text()
+              source, before_count = re.subn(
+                  r'(?m)^\\s*if C\\.IsDarwin \\{\\n\\s*r\\.logger\\.Error\\("NETWORK_DIAG interfaces before net\\.FlagUp filter: "[\\s\\S]*?^\\s*\\}\\n',
+                  '',
+                  source,
+                  count=1
+              )
+              source, after_count = re.subn(
+                  r'(?m)^\\s*if C\\.IsDarwin \\{\\n\\s*r\\.logger\\.Error\\("NETWORK_DIAG interfaces after net\\.FlagUp filter: count=", len\\(newInterfaces\\)\\)\\n\\s*\\}\\n',
+                  '',
+                  source,
+                  count=1
+              )
+              if before_count != 1 or after_count != 1:
+                  raise SystemExit(
+                      f"Expected both temporary Go network diagnostics, found before={before_count}, after={after_count}"
+                  )
+              if "NETWORK_DIAG" in source:
+                  raise SystemExit("Temporary Go network diagnostics remain")
+              go_path.write_text(source)
+
           view = root / "ApplicationLibrary/Views/Profile/NewProfileView.swift"
           source = view.read_text()
           marker = 'Section("诊断") {'
