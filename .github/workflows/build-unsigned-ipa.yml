@@ -423,76 +423,59 @@ jobs:
           print("Patched menu JSON import to read during security scope; profile creation now validates and saves captured UTF-8 text.")
           PY
 
-      - name: Replace iOS menu importer with native document picker
+      - name: Use SwiftUI file importer on iOS and keep broad file selection
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift')
-          s = p.read_text()
-          a = 'import UniformTypeIdentifiers\n'
-          if s.count(a) != 1: raise SystemExit('import anchor mismatch')
-          if 'import UIKit' not in s: s = s.replace(a, a + '#if os(iOS)\nimport UIKit\n#endif\n', 1)
-          old = '''        #if !os(tvOS)
-                      .fileImporter(
-                          isPresented: $showFileImporter,
-                          allowedContentTypes: Self.importContentTypes,
-                          allowsMultipleSelection: false
-                      ) { result in
-                          handleFileImport(result)
-                      }
-                      .sheet(isPresented: $showQRScanner) {'''
-          new = '''        #if !os(tvOS)
-                      #if os(iOS)
-                          .sheet(isPresented: $showFileImporter) {
-                              IOSNativeDocumentPicker { result in
-                                  showFileImporter = false
-                                  FilePath.appendDiagnosticLog("DOCUMENT_PICKER_CALLBACK")
-                                  handleFileImport(result)
-                              }
-                              .ignoresSafeArea()
-                          }
-                      #else
-                          .fileImporter(isPresented: $showFileImporter, allowedContentTypes: Self.importContentTypes, allowsMultipleSelection: false) { result in
-                              handleFileImport(result)
-                          }
-                      #endif
-                      .sheet(isPresented: $showQRScanner) {'''
-          if s.count(old) != 1: raise SystemExit(f'expected one iOS importer, got {s.count(old)}')
-          s = s.replace(old, new, 1)
-          extra = '''
+          import re
 
-          #if os(iOS)
-          private struct IOSNativeDocumentPicker: UIViewControllerRepresentable {
-              let onCompletion: (Result<[URL], Error>) -> Void
-              func makeCoordinator() -> Coordinator { Coordinator(onCompletion: onCompletion) }
-              func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-                  FilePath.appendDiagnosticLog("DOCUMENT_PICKER_PRESENT")
-                  let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: false)
-                  picker.allowsMultipleSelection = false
-                  picker.delegate = context.coordinator
-                  return picker
-              }
-              func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) {}
-              final class Coordinator: NSObject, UIDocumentPickerDelegate {
-                  let onCompletion: (Result<[URL], Error>) -> Void
-                  init(onCompletion: @escaping (Result<[URL], Error>) -> Void) { self.onCompletion = onCompletion }
-                  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-                      FilePath.appendDiagnosticLog("DOCUMENT_PICKER_DID_PICK count=\\(urls.count)")
-                      onCompletion(.success(urls))
-                  }
-                  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-                      FilePath.appendDiagnosticLog("DOCUMENT_PICKER_CANCELLED")
-                      onCompletion(.failure(CocoaError(.userCancelled)))
-                  }
-              }
-          }
-          #endif
-          '''
-          if 'private struct IOSNativeDocumentPicker' not in s: s += extra
-          p.write_text(s)
-          print('Native iOS document picker patch applied; macOS importer unchanged')
+          path = Path('sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift')
+          source = path.read_text()
+
+          source = source.replace(
+              'import UIKit\n',
+              '',
+              1
+          )
+
+          picker_pattern = re.compile(
+              r'(?P<indent>\s*)#if os\(iOS\)\n'
+              r'(?P=indent)    \.sheet\(isPresented: \$showFileImporter\) \{.*?'
+              r'(?P=indent)    #else\n'
+              r'(?P=indent)        \.fileImporter\(isPresented: \$showFileImporter, allowedContentTypes: Self\.importContentTypes, allowsMultipleSelection: false\) \{ result in\n'
+              r'(?P=indent)            handleFileImport\(result\)\n'
+              r'(?P=indent)        \}\n'
+              r'(?P=indent)    #endif',
+              re.S
+          )
+          source, count = picker_pattern.subn(
+              lambda m: (
+                  m.group('indent') +
+                  '.fileImporter(\n' +
+                  m.group('indent') + '    isPresented: $showFileImporter,\n' +
+                  m.group('indent') + '    allowedContentTypes: [.item],\n' +
+                  m.group('indent') + '    allowsMultipleSelection: false\n' +
+                  m.group('indent') + ') { result in\n' +
+                  m.group('indent') + '    handleFileImport(result)\n' +
+                  m.group('indent') + '}'
+              ),
+              source,
+              count=1
+          )
+          if count != 1:
+              raise SystemExit(f'Expected one native picker block to replace, found {count}')
+
+          native_picker_pattern = re.compile(
+              r'\n#if os\(iOS\)\nprivate struct IOSNativeDocumentPicker: UIViewControllerRepresentable \{.*?\n#endif\n?',
+              re.S
+          )
+          source, removed = native_picker_pattern.subn('\n', source, count=1)
+          if removed != 1:
+              raise SystemExit(f'Expected one custom UIKit picker to remove, found {removed}')
+
+          path.write_text(source)
+          print('Restored SwiftUI fileImporter on iOS with UTType.item; removed nested UIKit picker and delegate.')
           PY
-
 
       - name: Ignore picker cancellation and trace file import stages
         run: |
