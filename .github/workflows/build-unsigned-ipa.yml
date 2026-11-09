@@ -146,6 +146,165 @@ jobs:
           print("FilePath now handles an unavailable shared container without force-unwrapping nil")
           PY
 
+      - name: Add shared diagnostics log and visible profile import errors
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          base = Path("sing-box-for-apple")
+          fp = base / "Library/Shared/FilePath.swift"
+          text = fp.read_text()
+          anchor = "    public static let groupName = AppConfiguration.appGroupID\n"
+          additions = '''
+              public static var diagnosticLogURL: URL {
+                  resolvedSharedDirectory.appendingPathComponent("diagnostics.log", isDirectory: false)
+              }
+
+              public static var appGroupContainerPath: String {
+                  defaultSharedDirectory?.path ?? "UNAVAILABLE"
+              }
+
+              public static func appendDiagnosticLog(_ message: String) {
+                  let groupPath = defaultSharedDirectory?.path ?? "UNAVAILABLE"
+                  let timestamp = ISO8601DateFormatter().string(from: Date())
+                  let line = "[\\(timestamp)] [\\(ProcessInfo.processInfo.processName)] AppGroupID=\\(groupName) AppGroupContainer=\\(groupPath) LogPath=\\(diagnosticLogURL.path) \\(message)\\n"
+                  do {
+                      try FileManager.default.createDirectory(at: resolvedSharedDirectory, withIntermediateDirectories: true)
+                      if !FileManager.default.fileExists(atPath: diagnosticLogURL.path) {
+                          FileManager.default.createFile(atPath: diagnosticLogURL.path, contents: nil)
+                      }
+                      let handle = try FileHandle(forWritingTo: diagnosticLogURL)
+                      defer { try? handle.close() }
+                      try handle.seekToEnd()
+                      try handle.write(contentsOf: Data(line.utf8))
+                  } catch {
+                      NSLog("[sing-box] DIAGNOSTIC_LOG_WRITE_FAILED path=%@ error=%@", diagnosticLogURL.path, error.localizedDescription)
+                  }
+              }
+
+              public static func readDiagnosticLog() -> String {
+                  (try? String(contentsOf: diagnosticLogURL, encoding: .utf8)) ?? "No diagnostic log found at: \\(diagnosticLogURL.path)"
+              }
+          '''
+          if "public static func appendDiagnosticLog" not in text:
+              if text.count(anchor) != 1:
+                  raise SystemExit("FilePath groupName anchor missing or ambiguous")
+              text = text.replace(anchor, anchor + additions, 1)
+              fp.write_text(text)
+
+          ext = base / "Library/Network/ExtensionProvider.swift"
+          text = ext.read_text()
+          start = "    override open func startTunnel(options startOptions: [String: NSObject]?) async throws {"
+          insert = start + '\n        FilePath.appendDiagnosticLog("VPN_EXTENSION_START groupContainer=\\(FilePath.appGroupContainerPath)")'
+          if "VPN_EXTENSION_START groupContainer=" not in text:
+              if text.count(start) != 1:
+                  raise SystemExit("Extension startTunnel anchor missing or ambiguous")
+              text = text.replace(start, insert, 1)
+              ext.write_text(text)
+
+          model = base / "ApplicationLibrary/Views/Profile/NewProfileViewModel.swift"
+          text = model.read_text()
+          init_anchor = "        super.init()\n"
+          if "APP_START profile-import-view-model" not in text:
+              if text.count(init_anchor) != 1:
+                  raise SystemExit("NewProfileViewModel init anchor missing or ambiguous")
+              text = text.replace(init_anchor, init_anchor + '        FilePath.appendDiagnosticLog("APP_START profile-import-view-model groupContainer=\\(FilePath.appGroupContainerPath)")\n', 1)
+
+          catch_anchor = '''        } catch {
+              alert = AlertState(action: "create profile", error: error)
+              return
+          }'''
+          catch_replacement = '''        } catch {
+              let selectedPath = fileURL?.path ?? "(no file URL)"
+              FilePath.appendDiagnosticLog("PROFILE_CREATE_FAILED filePath=\\(selectedPath) error=\\(error.localizedDescription)")
+              if profileType == .local && fileImport {
+                  alert = AlertState(errorMessage: "读配置失败\\n文件路径：\\(selectedPath)\\n错误原因：\\(error.localizedDescription)")
+              } else {
+                  alert = AlertState(action: "create profile", error: error)
+              }
+              return
+          }'''
+          if "PROFILE_CREATE_FAILED filePath=" not in text:
+              if text.count(catch_anchor) != 1:
+                  raise SystemExit("Profile creation error handler anchor missing or ambiguous")
+              text = text.replace(catch_anchor, catch_replacement, 1)
+
+          text = text.replace(
+              'configContent = importedFileContent',
+              'configContent = importedFileContent\n                              FilePath.appendDiagnosticLog("PROFILE_IMPORT_CONTENT_READY filePath=\\(fileURL?.path ?? "(captured content)") bytes=\\(configContent.utf8.count)")',
+              1
+          )
+          model.write_text(text)
+
+          view = base / "ApplicationLibrary/Views/Profile/NewProfileView.swift"
+          text = view.read_text()
+          old = "viewModel.fileURL = urls[0]"
+          new = '''let selectedURL = urls[0]
+                              viewModel.fileURL = selectedURL
+                              do {
+                                  let content = try selectedURL.withSecurityScopedAccess {
+                                      try String(contentsOf: selectedURL, encoding: .utf8)
+                                  }
+                                  viewModel.fileContent = content
+                                  FilePath.appendDiagnosticLog("FILE_READ_OK filePath=\\(selectedURL.path) bytes=\\(content.utf8.count)")
+                              } catch {
+                                  viewModel.fileContent = nil
+                                  FilePath.appendDiagnosticLog("FILE_READ_FAILED filePath=\\(selectedURL.path) error=\\(error.localizedDescription)")
+                                  viewModel.alert = AlertState(errorMessage: "读配置失败\\n文件路径：\\(selectedURL.path)\\n错误原因：\\(error.localizedDescription)")
+                              }'''
+          count = text.count(old)
+          if count == 2:
+              text = text.replace(old, new)
+          elif count != 0:
+              raise SystemExit(f"Expected two file importer callbacks, found {count}")
+          
+          if "诊断日志" not in text:
+              section = '''
+                  Section("诊断") {
+                      NavigationLink("查看诊断日志") {
+                          DiagnosticLogView()
+                      }
+                      if #available(iOS 16.0, macOS 13.0, *) {
+                          ShareLink("分享诊断日志", item: FilePath.diagnosticLogURL)
+                      }
+                  }
+              '''
+              form_anchor = "            #if os(iOS) || os(tvOS)\n                Section {"
+              if text.count(form_anchor) != 1:
+                  raise SystemExit("Could not locate profile form insertion point for diagnostics")
+              text = text.replace(form_anchor, section + "\n" + form_anchor, 1)
+              text += '''
+
+          private struct DiagnosticLogView: View {
+              @State private var logText = ""
+
+              var body: some View {
+                  ScrollView {
+                      Text(logText.isEmpty ? "暂无诊断日志" : logText)
+                          .font(.system(.caption, design: .monospaced))
+                          .textSelection(.enabled)
+                          .frame(maxWidth: .infinity, alignment: .leading)
+                          .padding()
+                  }
+                  .navigationTitle("诊断日志")
+                  .onAppear {
+                      logText = FilePath.readDiagnosticLog()
+                  }
+                  .toolbar {
+                      if #available(iOS 16.0, macOS 13.0, *) {
+                          ToolbarItem(placement: .primaryAction) {
+                              ShareLink(item: FilePath.diagnosticLogURL)
+                          }
+                      }
+                  }
+              }
+          }
+          '''
+          view.write_text(text)
+
+          print("Added shared App Group diagnostic log, startup checks, file-read details, and in-app view/share UI.")
+          PY
+
       - name: Allow selecting JSON configuration files in both iOS importers
         run: |
           python3 - <<'PY'
