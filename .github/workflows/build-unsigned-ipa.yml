@@ -434,6 +434,32 @@ jobs:
           print("Patched menu JSON import to read during security scope; profile creation now validates and saves captured UTF-8 text.")
           PY
 
+      - name: Remove the broken file-import menu entry on iOS
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
+          source = path.read_text()
+          pattern = r'''                #if !os\\(tvOS\\)\\s*
+                              FormButton \\{\\s*
+                                  showFileImporter = true
+                              \\} label: \\{\\s*
+                                  Label\\("Import from File", systemImage: "doc\\.badge\\.plus"\\)
+                              \\}\\s*
+                          #endif\\s*'''
+          updated, count = re.subn(pattern, "", source, count=1)
+          if count != 1:
+              raise SystemExit(f"Expected exactly one Import from File menu item, found {count}")
+          if 'Label("Import from File"' in updated:
+              raise SystemExit("File import menu label still exists")
+          if 'Label("Create Manually"' not in updated:
+              raise SystemExit("Manual profile creation entry unexpectedly missing")
+          path.write_text(updated)
+          print("Removed only the Import from File menu item; manual creation remains.")
+          PY
+
       - name: Verify native SwiftUI file importer on iOS
         run: |
           python3 - <<'PY'
