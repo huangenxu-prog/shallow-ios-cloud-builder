@@ -286,13 +286,6 @@ jobs:
                   .onAppear {
                       logText = FilePath.readDiagnosticLog()
                   }
-                  .toolbar {
-                      if #available(iOS 16.0, macOS 13.0, *) {
-                          ToolbarItem(placement: .primaryAction) {
-                              ShareLink(item: FilePath.diagnosticLogURL)
-                          }
-                      }
-                  }
               }
           }
           '''
