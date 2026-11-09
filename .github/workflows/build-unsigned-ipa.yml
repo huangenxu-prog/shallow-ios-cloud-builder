@@ -224,7 +224,6 @@ jobs:
                   raise SystemExit(f"Expected one create-profile error assignment, found {text.count(catch_line)}")
               text = text.replace(catch_line, catch_line_replacement, 1)
 
-          text = text.replace(catch_anchor, catch_replacement, 1)
 
           text = text.replace(
               'configContent = importedFileContent',
