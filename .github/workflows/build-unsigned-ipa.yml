@@ -493,8 +493,6 @@ jobs:
 
           path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
           source = path.read_text()
-          if "#if os(iOS)\nimport UIKit\n#endif" not in source:
-              source = source.replace("import SwiftUI\n", "import SwiftUI\n#if os(iOS)\nimport UIKit\n#endif\n", 1)
           pattern = r'        private func handleFileImport\(_ result: Result<\[URL\], Error>\) \{[\s\S]*?\n        \}'
           replacement = r'''        private func handleFileImport(_ result: Result<[URL], Error>) {
                   FilePath.appendDiagnosticLog("FILE_IMPORT_HANDLER_ENTER")
@@ -561,15 +559,29 @@ jobs:
           updated, count = re.subn(pattern, lambda _: replacement, source, count=1)
           if count != 1:
               raise SystemExit(f"Expected one handleFileImport function, found {count}")
-          # Add an on-screen diagnostic state so the user can inspect each stage.
-          state_anchor = "    @State private var localImportRequest: NewProfileView.LocalImportRequest?\n"
-          state_add = """    @State private var showFileImportDiagnostic = false
-              @State private var fileImportDiagnostic = ""
-              @State private var pendingFileImportRequest: NewProfileView.LocalImportRequest?
-          """
-          if source.count(state_anchor) != 1:
-              raise SystemExit("Could not uniquely locate localImportRequest state")
-          source = source.replace(state_anchor, state_anchor + state_add, 1)
+          path.write_text(updated)
+          print("Replaced deferred file read with immediate security-scoped read in SwiftUI importer callback.")
+          PY
+
+      - name: Add visible file import diagnostic screen
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
+          source = path.read_text()
+          lines = source.splitlines()
+
+          state_line = "    @State private var localImportRequest: NewProfileView.LocalImportRequest?"
+          if "showFileImportDiagnostic" not in source:
+              index = lines.index(state_line)
+              lines[index + 1:index + 1] = [
+                  "    @State private var showFileImportDiagnostic = false",
+                  '    @State private var fileImportDiagnostic = ""',
+                  "    @State private var pendingFileImportRequest: NewProfileView.LocalImportRequest?"
+              ]
+
+          source = "\n".join(lines) + "\n"
 
           body_anchor = """        Group {
               if let request = importRequest {"""
@@ -585,10 +597,8 @@ jobs:
                       }
                       .frame(maxHeight: .infinity)
                       HStack {
-                          Button("复制日志") {
-                              #if os(iOS)
-                                  UIPasteboard.general.string = fileImportDiagnostic
-                              #endif
+                          ShareLink(item: fileImportDiagnostic) {
+                              Label("分享日志", systemImage: "square.and.arrow.up")
                           }
                           Spacer()
                           Button("返回") {
@@ -610,36 +620,42 @@ jobs:
               raise SystemExit("Could not uniquely locate otherBody Group")
           source = source.replace(body_anchor, body_replacement, 1)
 
-          helper_anchor = """    private func complete() {
-"""
+          helper_anchor = "    private func complete() {"
           helper = """    private func recordFileImport(_ message: String) {
-            let line = "[\\(ISO8601DateFormatter().string(from: Date()))] \\(message)"
-            fileImportDiagnostic += (fileImportDiagnostic.isEmpty ? "" : "\\n") + line
+            let timestamp = ISO8601DateFormatter().string(from: Date())
+            fileImportDiagnostic += (fileImportDiagnostic.isEmpty ? "" : "\\n") + "[\\(timestamp)] " + message
             FilePath.appendDiagnosticLog(message)
         }
 
 """
-          if source.count(helper_anchor) != 1:
-              raise SystemExit("Could not locate complete()")
-          source = source.replace(helper_anchor, helper + helper_anchor, 1)
+          if "private func recordFileImport" not in source:
+              if source.count(helper_anchor) != 1:
+                  raise SystemExit("Could not locate complete()")
+              source = source.replace(helper_anchor, helper + helper_anchor, 1)
 
-          # Show the diagnostic screen as soon as the native picker returns.
-          source = source.replace(
-              '                  FilePath.appendDiagnosticLog("FILE_IMPORT_HANDLER_ENTER")',
-              '                  fileImportDiagnostic = ""\n                  pendingFileImportRequest = nil\n                  showFileImportDiagnostic = true\n                  recordFileImport("FILE_IMPORT_HANDLER_ENTER")',
-              1
-          )
-          # Keep JSON content pending until the user has seen the read result.
-          source = source.replace(
-              '                              localImportRequest = NewProfileView.LocalImportRequest(name: fileName, configContent: configContent)',
-              '                              pendingFileImportRequest = NewProfileView.LocalImportRequest(name: fileName, configContent: configContent)',
-              1
-          )
-          # Route handler-stage logs into both the on-screen log and persistent diagnostic file.
-          for token in ["FILE_IMPORT_RESULT_RECEIVED", "FILE_IMPORT_EMPTY_URL_LIST", "FILE_IMPORT_SELECTED", "FILE_READ_OK", "PROFILE_IMPORT_CONTENT_READY", "FILE_READ_FAILED", "FILE_IMPORT_CANCELLED", "FILE_IMPORT_FAILED"]:
+          handler_anchor = '                  FilePath.appendDiagnosticLog("FILE_IMPORT_HANDLER_ENTER")'
+          handler_start = """                  fileImportDiagnostic = ""
+                  pendingFileImportRequest = nil
+                  showFileImportDiagnostic = true
+                  recordFileImport("FILE_IMPORT_HANDLER_ENTER")"""
+          if source.count(handler_anchor) != 1:
+              raise SystemExit("Could not locate importer handler entry")
+          source = source.replace(handler_anchor, handler_start, 1)
+
+          for token in [
+              "FILE_IMPORT_RESULT_RECEIVED", "FILE_IMPORT_EMPTY_URL_LIST",
+              "FILE_IMPORT_SELECTED", "FILE_READ_OK", "PROFILE_IMPORT_CONTENT_READY",
+              "FILE_READ_FAILED", "FILE_IMPORT_CANCELLED", "FILE_IMPORT_FAILED"
+          ]:
               source = source.replace('FilePath.appendDiagnosticLog("' + token, 'recordFileImport("' + token)
+
+          old_request = "localImportRequest = NewProfileView.LocalImportRequest(name: fileName, configContent: configContent)"
+          if source.count(old_request) != 1:
+              raise SystemExit("Could not locate successful JSON import handoff")
+          source = source.replace(old_request, "pendingFileImportRequest = NewProfileView.LocalImportRequest(name: fileName, configContent: configContent)", 1)
+
           path.write_text(source)
-          print("Added visible import diagnostic screen with copy, return, and continue actions; JSON profile creation waits until user confirms.")
+          print("Visible import diagnostics added; JSON content remains pending until the user confirms continuation.")
           PY
 
       - name: Use loopback TCP for iOS command channel
