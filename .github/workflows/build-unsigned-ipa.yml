@@ -150,6 +150,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           base = Path("sing-box-for-apple")
           fp = base / "Library/Shared/FilePath.swift"
@@ -210,24 +211,23 @@ jobs:
                   raise SystemExit("NewProfileViewModel init anchor missing or ambiguous")
               text = text.replace(init_anchor, init_anchor + '        FilePath.appendDiagnosticLog("APP_START profile-import-view-model groupContainer=\\(FilePath.appGroupContainerPath)")\n', 1)
 
-          catch_anchor = '''        } catch {
-              alert = AlertState(action: "create profile", error: error)
-              return
-          }'''
-          catch_replacement = '''        } catch {
-              let selectedPath = fileURL?.path ?? "(no file URL)"
-              FilePath.appendDiagnosticLog("PROFILE_CREATE_FAILED filePath=\\(selectedPath) error=\\(error.localizedDescription)")
-              if profileType == .local && fileImport {
-                  alert = AlertState(errorMessage: "读配置失败\\n文件路径：\\(selectedPath)\\n错误原因：\\(error.localizedDescription)")
-              } else {
-                  alert = AlertState(action: "create profile", error: error)
-              }
-              return
-          }'''
+          catch_pattern = r'\\} catch \\{\\s*alert = AlertState\\(action: "create profile", error: error\\)\\s*return\\s*\\}'
+          catch_replacement = """} catch {
+                      let selectedPath = fileURL?.path ?? "(no file URL)"
+                      FilePath.appendDiagnosticLog("PROFILE_CREATE_FAILED filePath=\\(selectedPath) error=\\(error.localizedDescription)")
+                      if profileType == .local && fileImport {
+                          alert = AlertState(errorMessage: "读配置失败\\n文件路径：\\(selectedPath)\\n错误原因：\\(error.localizedDescription)")
+                      } else {
+                          alert = AlertState(action: "create profile", error: error)
+                      }
+                      return
+                  }"""
           if "PROFILE_CREATE_FAILED filePath=" not in text:
-              if text.count(catch_anchor) != 1:
-                  raise SystemExit("Profile creation error handler anchor missing or ambiguous")
-              text = text.replace(catch_anchor, catch_replacement, 1)
+              text, count = re.subn(catch_pattern, lambda _: catch_replacement, text, count=1)
+              if count != 1:
+                  raise SystemExit("Could not locate profile creation error handler using whitespace-tolerant matching")
+
+          text = text.replace(catch_anchor, catch_replacement, 1)
 
           text = text.replace(
               'configContent = importedFileContent',
