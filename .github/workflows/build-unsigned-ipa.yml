@@ -493,18 +493,18 @@ jobs:
 
           path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
           source = path.read_text()
-          pattern = r'        private func handleFileImport\\(_ result: Result<\\[URL\\], Error>\\) \\{[\\s\\S]*?\\n        \\}'
+          pattern = r'        private func handleFileImport\(_ result: Result<\[URL\], Error>\) \{[\s\S]*?\n        \}'
           replacement = r'''        private func handleFileImport(_ result: Result<[URL], Error>) {
                   FilePath.appendDiagnosticLog("FILE_IMPORT_HANDLER_ENTER")
                   do {
                       let urls = try result.get()
-                      FilePath.appendDiagnosticLog("FILE_IMPORT_RESULT_RECEIVED count=\\(urls.count)")
+                      FilePath.appendDiagnosticLog("FILE_IMPORT_RESULT_RECEIVED count=\(urls.count)")
                       guard let url = urls.first else {
                           FilePath.appendDiagnosticLog("FILE_IMPORT_EMPTY_URL_LIST")
                           return
                       }
                       let fileExtension = url.pathExtension.lowercased()
-                      FilePath.appendDiagnosticLog("FILE_IMPORT_SELECTED path=\\(url.path) extension=\\(fileExtension)")
+                      FilePath.appendDiagnosticLog("FILE_IMPORT_SELECTED path=\(url.path) extension=\(fileExtension)")
 
                       if fileExtension != "bpf" {
                           let fileName = url.deletingPathExtension().lastPathComponent
@@ -514,12 +514,12 @@ jobs:
                               ) {
                                   try String(contentsOf: url, encoding: .utf8)
                               }
-                              FilePath.appendDiagnosticLog("FILE_READ_OK bytes=\\(configContent.utf8.count)")
+                              FilePath.appendDiagnosticLog("FILE_READ_OK bytes=\(configContent.utf8.count)")
                               localImportRequest = NewProfileView.LocalImportRequest(name: fileName, configContent: configContent)
-                              FilePath.appendDiagnosticLog("PROFILE_IMPORT_CONTENT_READY name=\\(fileName) bytes=\\(configContent.utf8.count)")
+                              FilePath.appendDiagnosticLog("PROFILE_IMPORT_CONTENT_READY name=\(fileName) bytes=\(configContent.utf8.count)")
                           } catch {
-                              FilePath.appendDiagnosticLog("FILE_READ_FAILED error=\\(error.localizedDescription)")
-                              alert = AlertState(errorMessage: "读配置失败\\n文件：\\(fileName)\\n错误原因：\\(error.localizedDescription)")
+                              FilePath.appendDiagnosticLog("FILE_READ_FAILED error=\(error.localizedDescription)")
+                              alert = AlertState(errorMessage: "读配置失败\n文件：\(fileName)\n错误原因：\(error.localizedDescription)")
                           }
                           return
                       }
@@ -533,7 +533,7 @@ jobs:
 
                       alert = AlertState(
                           title: String(localized: "Import Profile"),
-                          message: String(localized: "Are you sure to import profile \\(content.name)?"),
+                          message: String(localized: "Are you sure to import profile \(content.name)?"),
                           primaryButton: .default(String(localized: "Import")) {
                               Task {
                                   do {
@@ -552,7 +552,7 @@ jobs:
                           FilePath.appendDiagnosticLog("FILE_IMPORT_CANCELLED")
                           return
                       }
-                      FilePath.appendDiagnosticLog("FILE_IMPORT_FAILED error=\\(error.localizedDescription)")
+                      FilePath.appendDiagnosticLog("FILE_IMPORT_FAILED error=\(error.localizedDescription)")
                       alert = AlertState(action: "read imported profile file", error: error)
                   }
               }'''
