@@ -438,14 +438,19 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
           source = path.read_text()
-          pattern = r'                #if !os\\(tvOS\\)\\s+FormButton \\{\\s+showFileImporter = true\\s+\\} label: \\{\\s+Label\\("Import from File", systemImage: "doc\\.badge\\.plus"\\)\\s+\\}\\s+#endif'
-          updated, count = re.subn(pattern, "", source, count=1)
-          if count != 1:
-              raise SystemExit(f"Expected exactly one Import from File menu item, found {count}")
+          block = '''                #if !os(tvOS)
+                      FormButton {
+                          showFileImporter = true
+                      } label: {
+                          Label("Import from File", systemImage: "doc.badge.plus")
+                      }
+                  #endif'''
+          if source.count(block) != 1:
+              raise SystemExit(f"Expected exactly one Import from File menu item, found {source.count(block)}")
+          updated = source.replace(block, "", 1)
           if 'Label("Import from File"' in updated:
               raise SystemExit("File import menu label still exists")
           if 'Label("Create Manually"' not in updated:
