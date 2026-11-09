@@ -442,13 +442,7 @@ jobs:
 
           path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
           source = path.read_text()
-          pattern = r'''                #if !os\\(tvOS\\)\\s*
-                              FormButton \\{\\s*
-                                  showFileImporter = true
-                              \\} label: \\{\\s*
-                                  Label\\("Import from File", systemImage: "doc\\.badge\\.plus"\\)
-                              \\}\\s*
-                          #endif\\s*'''
+          pattern = r'                #if !os\\(tvOS\\)\\s+FormButton \\{\\s+showFileImporter = true\\s+\\} label: \\{\\s+Label\\("Import from File", systemImage: "doc\\.badge\\.plus"\\)\\s+\\}\\s+#endif'
           updated, count = re.subn(pattern, "", source, count=1)
           if count != 1:
               raise SystemExit(f"Expected exactly one Import from File menu item, found {count}")
