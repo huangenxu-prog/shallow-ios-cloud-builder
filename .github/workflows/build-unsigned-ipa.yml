@@ -2,6 +2,17 @@ name: Build Unsigned sing-box iOS IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      base_package_identifier:
+        description: "App bundle identifier authorized by the provisioning profile"
+        required: true
+        type: string
+        default: "io.nekohasekai.sfamt1"
+      app_group_identifier:
+        description: "App Group shared by the app and Packet Tunnel extension"
+        required: true
+        type: string
+        default: "group.2V688SXB74.3oyGlI"
   push:
     branches:
       - main
@@ -651,6 +662,9 @@ jobs:
           PY
 
       - name: Build unsigned iOS IPA
+        env:
+          BASE_PACKAGE_IDENTIFIER: ${{ inputs.base_package_identifier || 'io.nekohasekai.sfamt1' }}
+          APP_GROUP_IDENTIFIER: ${{ inputs.app_group_identifier || 'group.2V688SXB74.3oyGlI' }}
         run: |
           chmod +x scripts/build-unsigned-ipa.sh
           ./scripts/build-unsigned-ipa.sh sing-box-for-apple SFI
