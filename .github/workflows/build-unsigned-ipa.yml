@@ -423,7 +423,7 @@ jobs:
           print("Patched menu JSON import to read during security scope; profile creation now validates and saves captured UTF-8 text.")
           PY
 
-      - name: Use SwiftUI file importer on iOS and keep broad file selection
+      - name: Restore SwiftUI file importer on iOS
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -432,49 +432,42 @@ jobs:
           path = Path('sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift')
           source = path.read_text()
 
-          source = source.replace(
-              'import UIKit\n',
-              '',
-              1
-          )
-
-          picker_pattern = re.compile(
-              r'(?P<indent>\s*)#if os\(iOS\)\n'
-              r'(?P=indent)    \.sheet\(isPresented: \$showFileImporter\) \{.*?'
-              r'(?P=indent)    #else\n'
-              r'(?P=indent)        \.fileImporter\(isPresented: \$showFileImporter, allowedContentTypes: Self\.importContentTypes, allowsMultipleSelection: false\) \{ result in\n'
-              r'(?P=indent)            handleFileImport\(result\)\n'
-              r'(?P=indent)        \}\n'
-              r'(?P=indent)    #endif',
+          # Replace only the iOS branch installed by the native-picker patch.
+          # Match indentation flexibly because this file is nested in conditional
+          # compilation blocks and upstream formatting can change.
+          pattern = re.compile(
+              r'(?m)^(?P<i>[ \\t]*)#if os\\(iOS\\)\\s*'
+              r'(?P=i)\\.sheet\\(isPresented: \\$showFileImporter\\)\\s*\\{.*?'
+              r'^(?P=i)#else\\s*'
+              r'(?P=i)\\.fileImporter\\(isPresented: \\$showFileImporter, allowedContentTypes: Self\\.importContentTypes, allowsMultipleSelection: false\\) \\{ result in\\s*'
+              r'(?P=i)    handleFileImport\\(result\\)\\s*'
+              r'(?P=i)\\}\\s*'
+              r'^(?P=i)#endif',
               re.S
           )
-          source, count = picker_pattern.subn(
-              lambda m: (
-                  m.group('indent') +
-                  '.fileImporter(\n' +
-                  m.group('indent') + '    isPresented: $showFileImporter,\n' +
-                  m.group('indent') + '    allowedContentTypes: [.item],\n' +
-                  m.group('indent') + '    allowsMultipleSelection: false\n' +
-                  m.group('indent') + ') { result in\n' +
-                  m.group('indent') + '    handleFileImport(result)\n' +
-                  m.group('indent') + '}'
-              ),
-              source,
-              count=1
+          match = pattern.search(source)
+          if not match:
+              # Print nearby importer context to make future failures diagnosable.
+              lines = source.splitlines()
+              candidates = [n for n, line in enumerate(lines) if 'showFileImporter' in line or 'IOSNativeDocumentPicker' in line]
+              print('Importer candidates:', candidates)
+              for n in candidates:
+                  print('\\n'.join(f'{k+1}: {lines[k]}' for k in range(max(0,n-3), min(len(lines),n+10))))
+              raise SystemExit('Could not locate nested iOS document-picker branch')
+          
+          indent = match.group('i')
+          replacement = (
+              indent + '.fileImporter(\\n' +
+              indent + '    isPresented: $showFileImporter,\\n' +
+              indent + '    allowedContentTypes: [.item],\\n' +
+              indent + '    allowsMultipleSelection: false\\n' +
+              indent + ') { result in\\n' +
+              indent + '    handleFileImport(result)\\n' +
+              indent + '}'
           )
-          if count != 1:
-              raise SystemExit(f'Expected one native picker block to replace, found {count}')
-
-          native_picker_pattern = re.compile(
-              r'\n#if os\(iOS\)\nprivate struct IOSNativeDocumentPicker: UIViewControllerRepresentable \{.*?\n#endif\n?',
-              re.S
-          )
-          source, removed = native_picker_pattern.subn('\n', source, count=1)
-          if removed != 1:
-              raise SystemExit(f'Expected one custom UIKit picker to remove, found {removed}')
-
+          source = source[:match.start()] + replacement + source[match.end():]
           path.write_text(source)
-          print('Restored SwiftUI fileImporter on iOS with UTType.item; removed nested UIKit picker and delegate.')
+          print('Restored SwiftUI fileImporter with UTType.item; removed nested sheet from the active import path.')
           PY
 
       - name: Ignore picker cancellation and trace file import stages
