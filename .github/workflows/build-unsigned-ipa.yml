@@ -55,6 +55,116 @@ jobs:
           git clone --depth 1 --branch dev --recurse-submodules \
             https://github.com/SagerNet/sing-box-for-apple.git sing-box-for-apple
 
+      - name: Apply Surge-inspired strategy group layout
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          base = Path("sing-box-for-apple/ApplicationLibrary/Views/Groups")
+
+          model = base / "GroupListViewModel.swift"
+          source = model.read_text()
+          state_anchor = "    private var pendingExpands: [String: Bool] = [:]\n"
+          if source.count(state_anchor) != 1:
+              raise SystemExit("Could not uniquely locate group expansion state")
+          if "private var appliedInitialExpansion" not in source:
+              source = source.replace(
+                  state_anchor,
+                  state_anchor + "    private var appliedInitialExpansion = false\n",
+                  1
+              )
+
+          set_anchor = "        guard var newGroups else { return }\n"
+          init_rule = """        guard var newGroups else { return }
+                  if !appliedInitialExpansion, !newGroups.isEmpty {
+                      for index in newGroups.indices {
+                          newGroups[index].isExpand = newGroups[index].type.lowercased() == "selector"
+                      }
+                      appliedInitialExpansion = true
+                  }
+          """
+          if source.count(set_anchor) != 1:
+              raise SystemExit("Could not uniquely locate setGroups initialization")
+          if "newGroups[index].type.lowercased() == \"selector\"" not in source:
+              source = source.replace(set_anchor, init_rule, 1)
+          model.write_text(source)
+
+          view = base / "GroupView.swift"
+          source = view.read_text()
+          start_marker = "    public var body: some View {"
+          start = source.index(start_marker, source.index("public struct GroupHeaderView"))
+          end_marker = "\n    }\n}\n\n@MainActor\npublic struct GroupContentView"
+          end = source.index(end_marker, start)
+          replacement = '''    public var body: some View {
+                  HStack(alignment: .center, spacing: 12) {
+                      VStack(alignment: .leading, spacing: 4) {
+                          Text(group.tag)
+                              .font(.headline)
+                              .lineLimit(1)
+                              .truncationMode(.tail)
+                          Text(group.displayType)
+                              .font(.subheadline)
+                              .foregroundStyle(.secondary)
+                      }
+                      Spacer(minLength: 8)
+                      Text(verbatim: "\\(group.items.count)")
+                          .font(.caption.monospacedDigit().weight(.semibold))
+                          .foregroundStyle(.secondary)
+                          .padding(.horizontal, 9)
+                          .padding(.vertical, 4)
+                          .background(Color.urlTestNeutral, in: Capsule())
+                      Button {
+                          listViewModel.performGroupURLTest(group.tag)
+                      } label: {
+                          Group {
+                              if isTesting {
+                                  ProgressView()
+                                      .controlSize(.small)
+                              } else {
+                                  Image(systemName: "speedometer")
+                              }
+                          }
+                          .font(.system(size: 18, weight: .medium))
+                          .frame(width: 34, height: 34)
+                          .contentShape(Rectangle())
+                      }
+                      .disabled(isTesting)
+                      #if os(macOS) || os(tvOS)
+                          .buttonStyle(.plain)
+                      #else
+                          .buttonStyle(.borderless)
+                      #endif
+                      Button {
+                          listViewModel.toggleExpand(groupTag: group.tag)
+                      } label: {
+                          Image(systemName: group.isExpand ? "chevron.up" : "chevron.down")
+                              .font(.system(size: 14, weight: .semibold))
+                              .foregroundStyle(.secondary)
+                              .frame(width: 28, height: 34)
+                              .contentShape(Rectangle())
+                      }
+                      #if os(macOS) || os(tvOS)
+                          .buttonStyle(.plain)
+                      #else
+                          .buttonStyle(.borderless)
+                      #endif
+                  }
+                  .padding(EdgeInsets(top: 14, leading: 16, bottom: 12, trailing: 12))
+                  .frame(maxWidth: .infinity, alignment: .leading)
+                  #if !os(tvOS)
+                      .contentShape(Rectangle())
+                      .onTapGesture {
+                          listViewModel.toggleExpand(groupTag: group.tag)
+                      }
+                  #endif
+                      .cardSegment(top: true, bottom: false)
+              }'''
+          source = source[:start] + replacement + source[end + len("\n    }"):]
+          view.write_text(source)
+
+          print("Applied selector-first expansion and Surge-inspired strategy group cards.")
+          PY
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
