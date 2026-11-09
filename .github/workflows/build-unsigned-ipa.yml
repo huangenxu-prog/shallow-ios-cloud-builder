@@ -1,5 +1,4 @@
 name: Build Unsigned sing-box iOS IPA
-# Workflow validation is handled by validate-builder-workflow.yml
 
 on:
   workflow_dispatch:
@@ -562,100 +561,6 @@ jobs:
               raise SystemExit(f"Expected one handleFileImport function, found {count}")
           path.write_text(updated)
           print("Replaced deferred file read with immediate security-scoped read in SwiftUI importer callback.")
-          PY
-      - name: Add visible file import diagnostic screen
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
-          source = path.read_text()
-          lines = source.splitlines()
-
-          state_line = "    @State private var localImportRequest: NewProfileView.LocalImportRequest?"
-          if "showFileImportDiagnostic" not in source:
-              index = lines.index(state_line)
-              lines[index + 1:index + 1] = [
-                  "    @State private var showFileImportDiagnostic = false",
-                  '    @State private var fileImportDiagnostic = ""',
-                  "    @State private var pendingFileImportRequest: NewProfileView.LocalImportRequest?"
-              ]
-
-          source = "\n".join(lines) + "\n"
-
-          body_anchor = """        Group {
-              if let request = importRequest {"""
-          body_replacement = """        Group {
-              if showFileImportDiagnostic {
-                  VStack(alignment: .leading, spacing: 12) {
-                      Text("文件导入诊断").font(.headline)
-                      ScrollView {
-                          Text(fileImportDiagnostic.isEmpty ? "等待文件选择结果…" : fileImportDiagnostic)
-                              .font(.system(.caption, design: .monospaced))
-                              .textSelection(.enabled)
-                              .frame(maxWidth: .infinity, alignment: .leading)
-                      }
-                      .frame(maxHeight: .infinity)
-                      HStack {
-                          ShareLink(item: fileImportDiagnostic) {
-                              Label("分享日志", systemImage: "square.and.arrow.up")
-                          }
-                          Spacer()
-                          Button("返回") {
-                              showFileImportDiagnostic = false
-                          }
-                          if pendingFileImportRequest != nil {
-                              Button("继续创建配置") {
-                                  localImportRequest = pendingFileImportRequest
-                                  pendingFileImportRequest = nil
-                                  showFileImportDiagnostic = false
-                              }
-                              .buttonStyle(.borderedProminent)
-                          }
-                      }
-                  }
-                  .padding()
-              } else if let request = importRequest {"""
-          if source.count(body_anchor) != 1:
-              raise SystemExit("Could not uniquely locate otherBody Group")
-          source = source.replace(body_anchor, body_replacement, 1)
-
-          helper_anchor = "    private func complete() {"
-          helper = """    private func recordFileImport(_ message: String) {
-            let timestamp = ISO8601DateFormatter().string(from: Date())
-            fileImportDiagnostic += (fileImportDiagnostic.isEmpty ? "" : "\\n") + "[\\(timestamp)] " + message
-            FilePath.appendDiagnosticLog(message)
-        }
-
-"""
-          if "private func recordFileImport" not in source:
-              if source.count(helper_anchor) != 1:
-                  raise SystemExit("Could not locate complete()")
-              source = source.replace(helper_anchor, helper + helper_anchor, 1)
-
-          handler_anchor = '                  FilePath.appendDiagnosticLog("FILE_IMPORT_HANDLER_ENTER")'
-          handler_start = """                  fileImportDiagnostic = ""
-                  pendingFileImportRequest = nil
-                  showFileImportDiagnostic = true
-                  recordFileImport("FILE_IMPORT_HANDLER_ENTER")"""
-          if source.count(handler_anchor) != 1:
-              raise SystemExit("Could not locate importer handler entry")
-          source = source.replace(handler_anchor, handler_start, 1)
-
-          for token in [
-              "FILE_IMPORT_RESULT_RECEIVED", "FILE_IMPORT_EMPTY_URL_LIST",
-              "FILE_IMPORT_SELECTED", "FILE_READ_OK", "PROFILE_IMPORT_CONTENT_READY",
-              "FILE_READ_FAILED", "FILE_IMPORT_CANCELLED", "FILE_IMPORT_FAILED"
-          ]:
-              source = source.replace('FilePath.appendDiagnosticLog("' + token, 'recordFileImport("' + token)
-
-          old_request = "localImportRequest = NewProfileView.LocalImportRequest(name: fileName, configContent: configContent)"
-          if source.count(old_request) != 1:
-              raise SystemExit("Could not locate successful JSON import handoff")
-          source = source.replace(old_request, "pendingFileImportRequest = NewProfileView.LocalImportRequest(name: fileName, configContent: configContent)", 1)
-
-          path.write_text(source)
-          print("Visible import diagnostics added; JSON content remains pending until the user confirms continuation.")
           PY
 
       - name: Use loopback TCP for iOS command channel
