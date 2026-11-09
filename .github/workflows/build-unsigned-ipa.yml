@@ -731,7 +731,7 @@ jobs:
           marker = 'Section("诊断") {'
           if marker in source:
               start = source.index(marker)
-              line_start = source.rfind("\\n", 0, start) + 1
+              line_start = source.rfind("\n", 0, start) + 1
               depth = 0
               end = None
               for pos in range(start, len(source)):
@@ -744,9 +744,9 @@ jobs:
                           break
               if end is None:
                   raise SystemExit("Could not find end of temporary diagnostics section")
-              while end < len(source) and source[end] in " \\t":
+              while end < len(source) and source[end] in " \t":
                   end += 1
-              if end < len(source) and source[end] == "\\n":
+              if end < len(source) and source[end] == "\n":
                   end += 1
               source = source[:line_start] + source[end:]
           source = re.sub(
