@@ -233,12 +233,12 @@ jobs:
           go = Path("sing-box/route/network.go")
           source = go.read_text()
           anchor = "\t\toldInterfaces := r.networkInterfaces.Load()\n\t\tnewInterfaces := common.Filter(interfaces, func(it adapter.NetworkInterface) bool {"
-          replacement = "\t\tif C.IsDarwin {\n\t\t\tr.logger.Debug(\"NETWORK_DIAG interfaces before net.FlagUp filter: \", strings.Join(common.Map(interfaces, func(it adapter.NetworkInterface) string {\n\t\t\t\treturn F.ToString(\"name=\", it.Name, \" index=\", it.Index, \" flags=\", it.Flags, \" type=\", it.Type)\n\t\t\t}), \" | \"))\n\t\t}\n" + anchor
+          replacement = "\t\tif C.IsDarwin {\n\t\t\tr.logger.Error(\"NETWORK_DIAG interfaces before net.FlagUp filter: \", strings.Join(common.Map(interfaces, func(it adapter.NetworkInterface) string {\n\t\t\t\treturn F.ToString(\"name=\", it.Name, \" index=\", it.Index, \" flags=\", it.Flags, \" type=\", it.Type)\n\t\t\t}), \" | \"))\n\t\t}\n" + anchor
           if source.count(anchor) != 1:
               raise SystemExit("Go diagnostic insertion anchor is not unique")
           source = source.replace(anchor, replacement, 1)
           anchor2 = "\t\tr.networkInterfaces.Store(newInterfaces)\n\t\tif len(newInterfaces) > 0"
-          replacement2 = "\t\tr.networkInterfaces.Store(newInterfaces)\n\t\tif C.IsDarwin {\n\t\t\tr.logger.Debug(\"NETWORK_DIAG interfaces after net.FlagUp filter: count=\", len(newInterfaces))\n\t\t}\n\t\tif len(newInterfaces) > 0"
+          replacement2 = "\t\tr.networkInterfaces.Store(newInterfaces)\n\t\tif C.IsDarwin {\n\t\t\tr.logger.Error(\"NETWORK_DIAG interfaces after net.FlagUp filter: count=\", len(newInterfaces))\n\t\t}\n\t\tif len(newInterfaces) > 0"
           if source.count(anchor2) != 1:
               raise SystemExit("Go filtered-count insertion anchor is not unique")
           go.write_text(source.replace(anchor2, replacement2, 1))
@@ -860,7 +860,39 @@ jobs:
               if kept != lines:
                   path.write_text("".join(kept))
 
-          # Keep Go NETWORK_DIAG entries at DEBUG level for startup verification.
+          # The interface-filter diagnostics were also added to the Go core.
+          go_path = Path("sing-box/route/network.go")
+          if go_path.exists():
+              lines = go_path.read_text().splitlines(keepends=True)
+              markers = (
+                  "NETWORK_DIAG interfaces before net.FlagUp filter:",
+                  "NETWORK_DIAG interfaces after net.FlagUp filter: count="
+              )
+              for marker in markers:
+                  marker_index = next((i for i, line in enumerate(lines) if marker in line), None)
+                  if marker_index is None:
+                      raise SystemExit(f"Could not find temporary Go diagnostic marker: {marker}")
+                  block_start = next(
+                      (i for i in range(marker_index, -1, -1)
+                       if lines[i].strip() == "if C.IsDarwin {"),
+                      None
+                  )
+                  if block_start is None:
+                      raise SystemExit(f"Could not find enclosing Darwin block: {marker}")
+                  depth = 0
+                  block_end = None
+                  for i in range(block_start, len(lines)):
+                      depth += lines[i].count("{") - lines[i].count("}")
+                      if depth == 0:
+                          block_end = i + 1
+                          break
+                  if block_end is None:
+                      raise SystemExit(f"Unbalanced Go diagnostic block: {marker}")
+                  del lines[block_start:block_end]
+              source = "".join(lines)
+              if "NETWORK_DIAG" in source:
+                  raise SystemExit("Temporary Go network diagnostics remain")
+              go_path.write_text(source)
 
           view = root / "ApplicationLibrary/Views/Profile/NewProfileView.swift"
           source = view.read_text()
