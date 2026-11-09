@@ -176,6 +176,36 @@ jobs:
           print("Applied selector-first expansion and Surge-inspired strategy group cards.")
           PY
 
+      - name: Remove Import option from local profile type selector
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileView.swift")
+          source = path.read_text()
+          old = '''    private static var fileImportOptions: [FormPickerOption<Bool>] {
+          [
+              FormPickerOption(false, String(localized: "Create New")),
+              FormPickerOption(true, String(localized: "Import")),
+          ]
+      }'''
+          new = '''    private static var fileImportOptions: [FormPickerOption<Bool>] {
+          [
+              FormPickerOption(false, String(localized: "Create New")),
+          ]
+      }'''
+          if old in source:
+              source = source.replace(old, new, 1)
+          elif source.count('FormPickerOption(true, String(localized: "Import"))') == 0:
+              print("Import option already absent; no change needed")
+          else:
+              raise SystemExit("Could not uniquely locate local profile Import option")
+          if 'FormPickerOption(true, String(localized: "Import"))' in source:
+              raise SystemExit("Local profile Import option still exists")
+          path.write_text(source)
+          print("Removed Import from the local profile selector; Create New remains.")
+          PY
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
