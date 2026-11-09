@@ -92,11 +92,7 @@ jobs:
           view = base / "GroupView.swift"
           source = view.read_text()
           grid_anchor = "                LazyVGrid(columns: [GridItem(.adaptive(minimum: GroupsLayout.itemMinWidth), spacing: 10)], spacing: 10) {"
-          grid_replacement = """                #if os(tvOS)
-                          LazyVGrid(columns: [GridItem(.adaptive(minimum: GroupsLayout.itemMinWidth), spacing: 10)], spacing: 10) {
-                          #else
-                          LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                          #endif"""
+          grid_replacement = "                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {"
           if grid_anchor not in source:
               if "GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)" not in source:
                   raise SystemExit("Could not locate original adaptive node grid")
