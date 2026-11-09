@@ -6,7 +6,7 @@ SCHEME="${2:-SFI}"
 
 # Keep the bundle IDs, Info.plist values and signing entitlements aligned.
 BASE_PACKAGE_IDENTIFIER="${BASE_PACKAGE_IDENTIFIER:-io.nekohasekai.sfamt1}"
-APP_GROUP_IDENTIFIER="${APP_GROUP_IDENTIFIER:-group.2V688SXB74.3oyGlI}"
+APP_GROUP_IDENTIFIER="${APP_GROUP_IDENTIFIER:-group.${BASE_PACKAGE_IDENTIFIER}}"
 
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 OUTPUT_DIR="$GITHUB_WORKSPACE/output"
