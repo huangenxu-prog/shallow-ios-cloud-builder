@@ -563,7 +563,6 @@ jobs:
           path.write_text(updated)
           print("Replaced deferred file read with immediate security-scoped read in SwiftUI importer callback.")
           PY
-
       - name: Add visible file import diagnostic screen
         run: |
           python3 - <<'PY'
