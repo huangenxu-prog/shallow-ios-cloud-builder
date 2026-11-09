@@ -441,16 +441,19 @@ jobs:
 
           path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
           source = path.read_text()
-          block = '''                #if !os(tvOS)
-                      FormButton {
-                          showFileImporter = true
-                      } label: {
-                          Label("Import from File", systemImage: "doc.badge.plus")
-                      }
-                  #endif'''
-          if source.count(block) != 1:
-              raise SystemExit(f"Expected exactly one Import from File menu item, found {source.count(block)}")
-          updated = source.replace(block, "", 1)
+          label = 'Label("Import from File"'
+          if source.count(label) != 1:
+              raise SystemExit(f"Expected one file-import menu label, found {source.count(label)}")
+          label_at = source.index(label)
+          start = source.rfind("#if !os(tvOS)", 0, label_at)
+          end_at = source.find("#endif", label_at)
+          if start < 0 or end_at < 0:
+              raise SystemExit("Could not locate the conditional file-import menu block")
+          end = end_at + len("#endif")
+          block = source[start:end]
+          if "showFileImporter = true" not in block:
+              raise SystemExit("Located block is not the file-import menu action")
+          updated = source[:start] + source[end:]
           if 'Label("Import from File"' in updated:
               raise SystemExit("File import menu label still exists")
           if 'Label("Create Manually"' not in updated:
