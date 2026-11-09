@@ -728,12 +728,27 @@ jobs:
 
           view = root / "ApplicationLibrary/Views/Profile/NewProfileView.swift"
           source = view.read_text()
-          source, _ = re.subn(
-              r'(?m)^\s*Section\("诊断"\) \{[\s\S]*?^\s*\}\s*',
-              '',
-              source,
-              count=1
-          )
+          marker = 'Section("诊断") {'
+          if marker in source:
+              start = source.index(marker)
+              line_start = source.rfind("\\n", 0, start) + 1
+              depth = 0
+              end = None
+              for pos in range(start, len(source)):
+                  if source[pos] == "{":
+                      depth += 1
+                  elif source[pos] == "}":
+                      depth -= 1
+                      if depth == 0:
+                          end = pos + 1
+                          break
+              if end is None:
+                  raise SystemExit("Could not find end of temporary diagnostics section")
+              while end < len(source) and source[end] in " \\t":
+                  end += 1
+              if end < len(source) and source[end] == "\\n":
+                  end += 1
+              source = source[:line_start] + source[end:]
           source = re.sub(
               r'(?m)^private struct DiagnosticLogView: View \{[\s\S]*\Z',
               '',
