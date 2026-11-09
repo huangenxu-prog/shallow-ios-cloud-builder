@@ -26,7 +26,7 @@ jobs:
       - name: Clone sing-box core
         run: |
           git clone --depth 1 --branch testing \
-            https://github.com/SagerNet/sing-box.git sing-box
+            https://github.com/huangenxu-prog/sing-box.git sing-box
 
       - name: Apply REALITY X25519MLKEM768 compatibility patch
         working-directory: sing-box
