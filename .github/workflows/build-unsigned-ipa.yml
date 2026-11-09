@@ -494,7 +494,7 @@ jobs:
           path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
           source = path.read_text()
           if "#if os(iOS)\nimport UIKit\n#endif" not in source:
-              source = source.replace("import SwiftUI\\n", "import SwiftUI\\n#if os(iOS)\nimport UIKit\n#endif\\n", 1)
+              source = source.replace("import SwiftUI\n", "import SwiftUI\n#if os(iOS)\nimport UIKit\n#endif\n", 1)
           pattern = r'        private func handleFileImport\(_ result: Result<\[URL\], Error>\) \{[\s\S]*?\n        \}'
           replacement = r'''        private func handleFileImport(_ result: Result<[URL], Error>) {
                   FilePath.appendDiagnosticLog("FILE_IMPORT_HANDLER_ENTER")
