@@ -213,182 +213,66 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          menu = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
-          text = menu.read_text()
+          root = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile")
+          menu = root / "NewProfileMenuView.swift"
+          source = menu.read_text()
+          old = 'localImportRequest = NewProfileView.LocalImportRequest(name: fileName, fileURL: url)'
+          new = '''let configContent = try url.withSecurityScopedAccess {
+                                  try String(contentsOf: url, encoding: .utf8)
+                              }
+                              localImportRequest = NewProfileView.LocalImportRequest(name: fileName, configContent: configContent)'''
+          if source.count(old) != 1:
+              raise SystemExit("Expected one JSON import handoff in menu")
+          menu.write_text(source.replace(old, new, 1))
 
-          old = """        public let name: String
-                  public let fileURL: URL
-
-                  public init(name: String, fileURL: URL) {
-                      self.name = name
-                      self.fileURL = fileURL
-                  }"""
-          new = """        public let name: String
+          view = root / "NewProfileView.swift"
+          source = view.read_text()
+          pattern = r'public struct LocalImportRequest: Hashable, Identifiable \{.*?\n    \}'
+          replacement = '''public struct LocalImportRequest: Hashable, Identifiable {
+                  public var id: String { name + configContent }
+                  public let name: String
                   public let configContent: String
 
                   public init(name: String, configContent: String) {
                       self.name = name
                       self.configContent = configContent
-                  }"""
-          if text.count(old) != 1:
-              raise SystemExit("LocalImportRequest definition did not match expected upstream source")
-          text = text.replace(old, new, 1)
+                  }
+              }'''
+          source, count = re.subn(pattern, replacement, source, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit("Could not replace LocalImportRequest declaration")
+          view.write_text(source)
 
-          old = """                    if url.pathExtension.lowercased() == "json" {
-                          let fileName = url.deletingPathExtension().lastPathComponent
-                          localImportRequest = NewProfileView.LocalImportRequest(name: fileName, fileURL: url)
-                          return
-                      }"""
-          new = """                    if url.pathExtension.lowercased() == "json" {
-                          let fileName = url.deletingPathExtension().lastPathComponent
-                          let configContent = try url.withSecurityScopedAccess {
-                              try String(contentsOf: url, encoding: .utf8)
-                          }
-                          localImportRequest = NewProfileView.LocalImportRequest(name: fileName, configContent: configContent)
-                          return
-                      }"""
-          if text.count(old) != 1:
-              raise SystemExit("JSON import handoff did not match expected upstream source")
-          menu.write_text(text.replace(old, new, 1))
-
-          view = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileView.swift")
-          text = view.read_text()
-
-          old = """        public let name: String
-                public let fileURL: URL
-
-                public init(name: String, fileURL: URL) {
-                    self.name = name
-                    self.fileURL = fileURL
-                }"""
-          new = """        public let name: String
-                public let configContent: String
-
-                public init(name: String, configContent: String) {
-                    self.name = name
-                    self.configContent = configContent
-                }"""
-          if text.count(old) != 1:
-              raise SystemExit("NewProfileView LocalImportRequest did not match expected source")
-          text = text.replace(old, new, 1)
-
-          old = """            .fileImporter(
-                    isPresented: $viewModel.pickerPresented,
-                    allowedContentTypes: [.data],
-                    allowsMultipleSelection: false
-                ) { result in
-                    do {
-                        let urls = try result.get()
-                        if !urls.isEmpty {
-                            viewModel.fileURL = urls[0]
-                        }
-                    } catch {
-                        viewModel.alert = AlertState(action: "read imported profile file", error: error)
-                        return
-                    }
-                }"""
-          new = """            .fileImporter(
-                    isPresented: $viewModel.pickerPresented,
-                    allowedContentTypes: [.data],
-                    allowsMultipleSelection: false
-                ) { result in
-                    do {
-                        let urls = try result.get()
-                        guard let url = urls.first else { return }
-                        let content = try url.withSecurityScopedAccess {
-                            try String(contentsOf: url, encoding: .utf8)
-                        }
-                        viewModel.fileURL = url
-                        viewModel.fileContent = content
-                    } catch {
-                        viewModel.alert = AlertState(action: "read imported profile file", error: error)
-                    }
-                }"""
-          if text.count(old) != 1:
-              raise SystemExit("iOS file importer callback did not match expected patched source")
-          text = text.replace(old, new, 1)
-
-          old = """                .fileImporter(
-                    isPresented: $viewModel.pickerPresented,
-                    allowedContentTypes: [.data],
-                    allowsMultipleSelection: false
-                ) { result in
-                    do {
-                        let urls = try result.get()
-                        if !urls.isEmpty {
-                            viewModel.fileURL = urls[0]
-                        }
-                    } catch {
-                        viewModel.alert = AlertState(action: "read imported profile file", error: error)
-                        return
-                    }
-                }"""
-          new = """                .fileImporter(
-                    isPresented: $viewModel.pickerPresented,
-                    allowedContentTypes: [.data],
-                    allowsMultipleSelection: false
-                ) { result in
-                    do {
-                        let urls = try result.get()
-                        guard let url = urls.first else { return }
-                        let content = try url.withSecurityScopedAccess {
-                            try String(contentsOf: url, encoding: .utf8)
-                        }
-                        viewModel.fileURL = url
-                        viewModel.fileContent = content
-                    } catch {
-                        viewModel.alert = AlertState(action: "read imported profile file", error: error)
-                    }
-                }"""
-          if text.count(old) != 1:
-              raise SystemExit("macOS file importer callback did not match expected patched source")
-          view.write_text(text.replace(old, new, 1))
-
-          model = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileViewModel.swift")
-          text = model.read_text()
+          model = root / "NewProfileViewModel.swift"
+          source = model.read_text()
           anchor = "    @Published public var fileURL: URL?\n"
-          if text.count(anchor) != 1:
-              raise SystemExit("Could not locate fileURL published property")
-          text = text.replace(anchor, anchor + "    @Published public var fileContent: String?\n", 1)
+          if source.count(anchor) != 1:
+              raise SystemExit("fileURL property anchor missing")
+          source = source.replace(anchor, anchor + "    @Published public var fileContent: String?\n", 1)
 
-          old = """            fileImport = true
-                    fileURL = localImportRequest.fileURL"""
-          new = """            fileImport = true
-                    fileContent = localImportRequest.configContent"""
-          if text.count(old) != 1:
-              raise SystemExit("Local import initialization did not match expected source")
-          text = text.replace(old, new, 1)
-
-          old = """        fileURL = nil
-                remotePath = """""
-          new = """        fileURL = nil
-                fileContent = nil
-                remotePath = """""
-          if text.count(old) != 1:
-              raise SystemExit("resetFields file URL reset did not match expected source")
-          text = text.replace(old, new, 1)
+          old = "            fileURL = localImportRequest.fileURL"
+          if source.count(old) != 1:
+              raise SystemExit("LocalImportRequest initializer handoff missing")
+          source = source.replace(old, "            fileContent = localImportRequest.configContent", 1)
 
           anchor = "        let fileURL = await fileURL\n"
-          if text.count(anchor) != 1:
-              raise SystemExit("Could not locate captured fileURL in background create")
-          text = text.replace(anchor, anchor + "        let importedFileContent = await fileContent\n", 1)
+          if source.count(anchor) != 1:
+              raise SystemExit("Background fileURL capture missing")
+          source = source.replace(anchor, anchor + "        let importedFileContent = await fileContent\n", 1)
 
-          old = """                    guard let fileURL else {
-                            throw NSError(domain: "NewProfileViewModel", code: 0, userInfo: [NSLocalizedDescriptionKey: String(localized: "Missing file")])
-                        }
-                        configContent = try fileURL.withSecurityScopedAccess {
-                            try String(contentsOf: fileURL)
-                        }"""
-          new = """                    guard let importedFileContent else {
-                            throw NSError(domain: "NewProfileViewModel", code: 0, userInfo: [NSLocalizedDescriptionKey: String(localized: "Missing imported file content")])
-                        }
-                        configContent = importedFileContent"""
-          if text.count(old) != 1:
-              raise SystemExit("Deferred file URL read did not match expected source")
-          model.write_text(text.replace(old, new, 1))
+          pattern = r'guard let fileURL else \{\s*throw NSError\(domain: "NewProfileViewModel".*?\n\s*\}\s*configContent = try fileURL\.withSecurityScopedAccess \{\s*try String\(contentsOf: fileURL\)\s*\}'
+          replacement = '''guard let importedFileContent else {
+                                  throw NSError(domain: "NewProfileViewModel", code: 0, userInfo: [NSLocalizedDescriptionKey: String(localized: "Missing imported file content")])
+                              }
+                              configContent = importedFileContent'''
+          source, count = re.subn(pattern, replacement, source, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit("Could not replace deferred URL read in profile creation")
+          model.write_text(source)
 
-          print("Imported JSON is now read inside the file-import callback while its security scope is active; profile creation uses the captured text, not a stale URL.")
+          print("Patched menu JSON import to read during security scope; profile creation now validates and saves captured UTF-8 text.")
           PY
 
       - name: Use loopback TCP for iOS command channel
