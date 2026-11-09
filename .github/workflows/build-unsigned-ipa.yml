@@ -697,26 +697,24 @@ jobs:
 
           root = Path("sing-box-for-apple")
 
-          # Remove only diagnostic APIs introduced for this investigation.
           fp = root / "Library/Shared/FilePath.swift"
           source = fp.read_text()
           source, count = re.subn(
-              r'(?m)^\\s*public static var diagnosticLogURL: URL \\{[\\s\\S]*?public static func readDiagnosticLog\\(\\) -> String \\{[\\s\\S]*?^\\s*\\}\\s*',
+              r'(?m)^\s*public static var diagnosticLogURL: URL \{[\s\S]*?public static func readDiagnosticLog\(\) -> String \{[\s\S]*?^\s*\}\s*',
               '',
               source,
               count=1
           )
-          if count > 1:
-              raise SystemExit("Unexpected duplicate diagnostic API blocks")
+          if count != 1:
+              raise SystemExit(f"Expected one temporary diagnostic API block, found {count}")
           source = re.sub(
-              r'(?m)^\\s*NSLog\\("\\[sing-box\\] App Group container unavailable; using local fallback directory: %@"[^\\n]*\\n',
+              r'(?m)^\s*NSLog\("\[sing-box\] App Group container unavailable; using local fallback directory: %@"[^\n]*\n',
               '',
               source
           )
           fp.write_text(source)
 
-          # Remove our temporary call sites and NETWORK_DIAG instrumentation,
-          # preserving all logging that was already present in the author's source.
+          # Remove only call sites and network diagnostics introduced by us.
           for path in root.rglob("*.swift"):
               source = path.read_text()
               lines = source.splitlines(keepends=True)
@@ -728,17 +726,16 @@ jobs:
               if kept != lines:
                   path.write_text("".join(kept))
 
-          # Remove the temporary in-app diagnostics section and viewer.
           view = root / "ApplicationLibrary/Views/Profile/NewProfileView.swift"
           source = view.read_text()
           source, _ = re.subn(
-              r'(?m)^\\s*Section\\("诊断"\\) \\{[\\s\\S]*?^\\s*\\}\\s*',
+              r'(?m)^\s*Section\("诊断"\) \{[\s\S]*?^\s*\}\s*',
               '',
               source,
               count=1
           )
           source = re.sub(
-              r'(?m)^private struct DiagnosticLogView: View \\{[\\s\\S]*\\Z',
+              r'(?m)^private struct DiagnosticLogView: View \{[\s\S]*\Z',
               '',
               source,
               count=1
@@ -746,13 +743,11 @@ jobs:
           source = source.replace('                          ShareLink("分享诊断日志", item: FilePath.diagnosticLogURL)\n', '')
           view.write_text(source)
 
-          # Ensure the temporary diagnostic feature is gone, while leaving
-          # the author's existing logger calls untouched.
           for path in root.rglob("*.swift"):
               source = path.read_text()
               if "appendDiagnosticLog" in source or "DiagnosticLogView" in source or "NETWORK_DIAG" in source:
                   raise SystemExit(f"Temporary diagnostic code remains in {path}")
-          print("Removed temporary debugging logs and diagnostic UI; preserved original application logging.")
+          print("Temporary debugging instrumentation removed; author logging preserved.")
           PY
 
       - name: Build unsigned iOS IPA
