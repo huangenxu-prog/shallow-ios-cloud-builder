@@ -1,0 +1,19 @@
+name: Validate builder workflow
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse build workflow YAML
+        run: |
+          ruby -e 'require "yaml"; YAML.load_file(".github/workflows/build-unsigned-ipa.yml"); puts "YAML syntax OK"'
