@@ -183,27 +183,13 @@ jobs:
 
           path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileView.swift")
           source = path.read_text()
-          old = '''    private static var fileImportOptions: [FormPickerOption<Bool>] {
-          [
-              FormPickerOption(false, String(localized: "Create New")),
-              FormPickerOption(true, String(localized: "Import")),
-          ]
-      }'''
-          new = '''    private static var fileImportOptions: [FormPickerOption<Bool>] {
-          [
-              FormPickerOption(false, String(localized: "Create New")),
-          ]
-      }'''
-          if old in source:
-              source = source.replace(old, new, 1)
-          elif source.count('FormPickerOption(true, String(localized: "Import"))') == 0:
-              print("Import option already absent; no change needed")
-          else:
-              raise SystemExit("Could not uniquely locate local profile Import option")
-          if 'FormPickerOption(true, String(localized: "Import"))' in source:
-              raise SystemExit("Local profile Import option still exists")
+          import_line = '                FormPickerOption(true, String(localized: "Import")),\\n'
+          if source.count(import_line) == 1:
+              source = source.replace(import_line, "", 1)
+          elif 'FormPickerOption(true, String(localized: "Import"))' in source:
+              raise SystemExit("Import option exists in an unexpected form; refusing unsafe edit")
           path.write_text(source)
-          print("Removed Import from the local profile selector; Create New remains.")
+          print("Removed Import option; Create New remains.")
           PY
 
       - name: Setup Go
