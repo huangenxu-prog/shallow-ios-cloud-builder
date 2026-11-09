@@ -840,22 +840,34 @@ jobs:
           go_path = Path("sing-box/route/network.go")
           if go_path.exists():
               source = go_path.read_text()
-              source, before_count = re.subn(
-                  r'(?m)^\\s*if C\\.IsDarwin \\{\\n\\s*r\\.logger\\.Error\\("NETWORK_DIAG interfaces before net\\.FlagUp filter: "[\\s\\S]*?^\\s*\\}\\n',
-                  '',
-                  source,
-                  count=1
-              )
-              source, after_count = re.subn(
-                  r'(?m)^\\s*if C\\.IsDarwin \\{\\n\\s*r\\.logger\\.Error\\("NETWORK_DIAG interfaces after net\\.FlagUp filter: count=", len\\(newInterfaces\\)\\)\\n\\s*\\}\\n',
-                  '',
-                  source,
-                  count=1
-              )
-              if before_count != 1 or after_count != 1:
-                  raise SystemExit(
-                      f"Expected both temporary Go network diagnostics, found before={before_count}, after={after_count}"
-                  )
+              for marker in (
+                  'r.logger.Error("NETWORK_DIAG interfaces before net.FlagUp filter: ',
+                  'r.logger.Error("NETWORK_DIAG interfaces after net.FlagUp filter: count="'
+              ):
+                  marker_at = source.find(marker)
+                  if marker_at < 0:
+                      raise SystemExit(f"Could not find temporary Go diagnostic marker: {marker}")
+                  line_start = source.rfind("\\n", 0, marker_at) + 1
+                  block_start = source.rfind("if C.IsDarwin {", 0, marker_at)
+                  if block_start < 0 or block_start < line_start - 200:
+                      raise SystemExit(f"Could not find enclosing Darwin diagnostic block: {marker}")
+                  block_start = source.rfind("\\n", 0, block_start) + 1
+                  open_brace = source.find("{", block_start)
+                  depth = 0
+                  block_end = None
+                  for pos in range(open_brace, len(source)):
+                      if source[pos] == "{":
+                          depth += 1
+                      elif source[pos] == "}":
+                          depth -= 1
+                          if depth == 0:
+                              block_end = pos + 1
+                              break
+                  if block_end is None:
+                      raise SystemExit(f"Unbalanced Go diagnostic block: {marker}")
+                  if block_end < len(source) and source[block_end] == "\\n":
+                      block_end += 1
+                  source = source[:block_start] + source[block_end:]
               if "NETWORK_DIAG" in source:
                   raise SystemExit("Temporary Go network diagnostics remain")
               go_path.write_text(source)
