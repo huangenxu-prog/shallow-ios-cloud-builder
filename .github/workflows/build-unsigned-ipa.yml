@@ -427,35 +427,24 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           path = Path('sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift')
           source = path.read_text()
 
-          # Replace only the iOS branch installed by the native-picker patch.
-          # Match indentation flexibly because this file is nested in conditional
-          # compilation blocks and upstream formatting can change.
-          pattern = re.compile(
-              r'(?m)^(?P<i>[ \\t]*)#if os\\(iOS\\)\\s*'
-              r'(?P=i)\\.sheet\\(isPresented: \\$showFileImporter\\)\\s*\\{.*?'
-              r'^(?P=i)#else\\s*'
-              r'(?P=i)\\.fileImporter\\(isPresented: \\$showFileImporter, allowedContentTypes: Self\\.importContentTypes, allowsMultipleSelection: false\\) \\{ result in\\s*'
-              r'(?P=i)    handleFileImport\\(result\\)\\s*'
-              r'(?P=i)\\}\\s*'
-              r'^(?P=i)#endif',
-              re.S
-          )
-          match = pattern.search(source)
-          if not match:
-              # Print nearby importer context to make future failures diagnosable.
-              lines = source.splitlines()
-              candidates = [n for n, line in enumerate(lines) if 'showFileImporter' in line or 'IOSNativeDocumentPicker' in line]
-              print('Importer candidates:', candidates)
-              for n in candidates:
-                  print('\\n'.join(f'{k+1}: {lines[k]}' for k in range(max(0,n-3), min(len(lines),n+10))))
-              raise SystemExit('Could not locate nested iOS document-picker branch')
-          
-          indent = match.group('i')
+          sheet_marker = '.sheet(isPresented: $showFileImporter) {'
+          sheet_pos = source.find(sheet_marker)
+          if sheet_pos < 0:
+              raise SystemExit('Could not find the native picker sheet marker')
+
+          block_start = source.rfind('#if os(iOS)', 0, sheet_pos)
+          else_pos = source.find('#else', sheet_pos)
+          endif_pos = source.find('#endif', else_pos)
+          if block_start < 0 or else_pos < 0 or endif_pos < 0:
+              raise SystemExit('Could not find complete iOS/else/endif importer block')
+
+          line_start = source.rfind('\\n', 0, block_start) + 1
+          indent = source[line_start:block_start]
+          block_end = endif_pos + len('#endif')
           replacement = (
               indent + '.fileImporter(\\n' +
               indent + '    isPresented: $showFileImporter,\\n' +
@@ -465,9 +454,10 @@ jobs:
               indent + '    handleFileImport(result)\\n' +
               indent + '}'
           )
-          source = source[:match.start()] + replacement + source[match.end():]
+
+          source = source[:line_start] + replacement + source[block_end:]
           path.write_text(source)
-          print('Restored SwiftUI fileImporter with UTType.item; removed nested sheet from the active import path.')
+          print('Restored SwiftUI fileImporter with UTType.item; removed nested UIKit sheet from active import path.')
           PY
 
       - name: Ignore picker cancellation and trace file import stages
