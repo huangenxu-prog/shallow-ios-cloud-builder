@@ -423,41 +423,20 @@ jobs:
           print("Patched menu JSON import to read during security scope; profile creation now validates and saves captured UTF-8 text.")
           PY
 
-      - name: Restore SwiftUI file importer on iOS
+      - name: Verify native SwiftUI file importer on iOS
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift')
+          path = Path("sing-box-for-apple/ApplicationLibrary/Views/Profile/NewProfileMenuView.swift")
           source = path.read_text()
-
-          sheet_marker = '.sheet(isPresented: $showFileImporter) {'
-          sheet_pos = source.find(sheet_marker)
-          if sheet_pos < 0:
-              raise SystemExit('Could not find the native picker sheet marker')
-
-          block_start = source.rfind('#if os(iOS)', 0, sheet_pos)
-          else_pos = source.find('#else', sheet_pos)
-          endif_pos = source.find('#endif', else_pos)
-          if block_start < 0 or else_pos < 0 or endif_pos < 0:
-              raise SystemExit('Could not find complete iOS/else/endif importer block')
-
-          line_start = source.rfind('\\n', 0, block_start) + 1
-          indent = source[line_start:block_start]
-          block_end = endif_pos + len('#endif')
-          replacement = (
-              indent + '.fileImporter(\\n' +
-              indent + '    isPresented: $showFileImporter,\\n' +
-              indent + '    allowedContentTypes: [.item],\\n' +
-              indent + '    allowsMultipleSelection: false\\n' +
-              indent + ') { result in\\n' +
-              indent + '    handleFileImport(result)\\n' +
-              indent + '}'
-          )
-
-          source = source[:line_start] + replacement + source[block_end:]
-          path.write_text(source)
-          print('Restored SwiftUI fileImporter with UTType.item; removed nested UIKit sheet from active import path.')
+          if ".fileImporter(" not in source:
+              raise SystemExit("Native SwiftUI fileImporter is missing")
+          if "handleFileImport(result)" not in source:
+              raise SystemExit("Native importer callback is not connected")
+          if "IOSNativeDocumentPicker" in source:
+              raise SystemExit("Unexpected UIKit document picker remains in source")
+          print("Verified native SwiftUI importer and callback; no replacement required.")
           PY
 
       - name: Ignore picker cancellation and trace file import stages
