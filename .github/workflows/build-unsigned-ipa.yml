@@ -1,4 +1,5 @@
 name: Build Unsigned sing-box iOS IPA
+# Workflow validation is handled by validate-builder-workflow.yml
 
 on:
   workflow_dispatch:
